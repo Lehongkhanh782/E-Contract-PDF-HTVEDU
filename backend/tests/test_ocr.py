@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import unittest
+from unittest import mock
 
 from app.services import ocr
 from tests import logged_in_client
@@ -232,7 +233,8 @@ class TestApi(unittest.TestCase):
         )
         self.assertEqual(phan_hoi.status_code, 200, phan_hoi.text)
         body = phan_hoi.json()
-        self.assertEqual(body["source_kind"], "pdf")
+        # Kết quả nay gộp từ nhiều tệp nên loại nguồn nằm trong từng tệp.
+        self.assertEqual(body["files"][0]["source_kind"], "pdf")
         self.assertEqual(body["fields"]["identity_number"], "079199000123")
         self.assertEqual(body["fields"]["gender"], "Nữ")
         self.assertEqual(body["fields"]["birth_date"], "1999-01-01")
@@ -244,6 +246,100 @@ class TestApi(unittest.TestCase):
             files={"anh": ("scan.pdf", the_gia_pdf(), "application/pdf")},
         ).json()
         self.assertTrue(body["is_suggestion_only"])
+
+
+class TestNhieuTep(unittest.TestCase):
+    """Gộp kết quả từ nhiều tệp, ví dụ mặt trước và mặt sau."""
+
+    def tep(self, du_lieu: bytes, ten: str = "a.png", kieu: str = "image/png"):
+        return ("anh", (ten, du_lieu, kieu))
+
+    def test_tu_choi_qua_so_tep_cho_phep(self):
+        anh = ve_the_gia()
+        phan_hoi = client.post(
+            "/api/ocr",
+            files=[self.tep(anh) for _ in range(ocr.SO_TEP_TOI_DA + 1)],
+        )
+        self.assertEqual(phan_hoi.status_code, 400)
+        self.assertIn(str(ocr.SO_TEP_TOI_DA), phan_hoi.json()["detail"])
+
+    def test_gop_lay_gia_tri_dau_tien_doc_duoc(self):
+        goc = {"identity_number": None, "full_name": "VŨ THỊ LAN ANH",
+               "birth_date": None, "gender": None,
+               "nationality": None, "permanent_address": None}
+        sau = {"identity_number": "079305030736", "full_name": None,
+               "birth_date": "2005-12-20", "gender": "Nữ",
+               "nationality": None, "permanent_address": None}
+        with mock.patch.object(ocr, "doc_giay_to") as gia:
+            gia.side_effect = [
+                {"fields": goc, "recognised": ["full_name"],
+                 "source_kind": "image", "raw_text": "a"},
+                {"fields": sau, "recognised": ["identity_number", "birth_date",
+                                               "gender"],
+                 "source_kind": "image", "raw_text": "b"},
+            ]
+            ket_qua = ocr.gop_nhieu_tep([b"1", b"2"])
+        self.assertEqual(ket_qua["fields"]["full_name"], "VŨ THỊ LAN ANH")
+        self.assertEqual(ket_qua["fields"]["identity_number"], "079305030736")
+        self.assertEqual(ket_qua["fields"]["gender"], "Nữ")
+        self.assertIn("nationality", ket_qua["missing"])
+        self.assertEqual(len(ket_qua["files"]), 2)
+
+    def test_mot_tep_hong_khong_lam_mat_ket_qua_tep_kia(self):
+        tot = {ten: None for ten in ocr.TRUONG}
+        tot["full_name"] = "VŨ THỊ LAN ANH"
+        with mock.patch.object(ocr, "doc_giay_to") as gia:
+            gia.side_effect = [
+                ocr.AnhKhongHopLe("tệp hỏng"),
+                {"fields": tot, "recognised": ["full_name"],
+                 "source_kind": "image", "raw_text": "b"},
+            ]
+            ket_qua = ocr.gop_nhieu_tep([b"1", b"2"])
+        self.assertEqual(ket_qua["fields"]["full_name"], "VŨ THỊ LAN ANH")
+        self.assertIn("error", ket_qua["files"][0])
+
+    def test_tat_ca_hong_thi_bao_loi(self):
+        with mock.patch.object(ocr, "doc_giay_to") as gia:
+            gia.side_effect = ocr.AnhKhongHopLe("tệp hỏng")
+            with self.assertRaises(ocr.AnhKhongHopLe):
+                ocr.gop_nhieu_tep([b"1", b"2"])
+
+    def test_khong_co_tep_nao(self):
+        with self.assertRaises(ocr.AnhKhongHopLe):
+            ocr.gop_nhieu_tep([])
+
+    @unittest.skipUnless(CO_TESSERACT, "Máy chưa cài Tesseract")
+    def test_hai_anh_that_su_gop_duoc(self):
+        phan_hoi = client.post(
+            "/api/ocr",
+            files=[self.tep(ve_the_gia(), "truoc.png"),
+                   self.tep(ve_the_gia(ten="TRẦN VĂN BỐN"), "sau.png")],
+        )
+        self.assertEqual(phan_hoi.status_code, 200, phan_hoi.text)
+        body = phan_hoi.json()
+        self.assertEqual(len(body["files"]), 2)
+        self.assertEqual(body["fields"]["identity_number"], "079199000123")
+
+
+class TestNhanDienTenRieng(unittest.TestCase):
+    """Dải à-ỹ trong Unicode chứa lẫn chữ hoa nên không dùng được."""
+
+    def test_chu_hoa_toan_bo_khong_phai_ten_rieng(self):
+        self.assertEqual(ocr._ten_rieng("TỀ HĐ SI"), [])
+
+    def test_nhan_ra_ten_rieng_that(self):
+        self.assertEqual(
+            ocr._ten_rieng("Bình Tân, Hồ Chí Minh"),
+            ["Bình", "Tân", "Hồ", "Chí", "Minh"],
+        )
+
+    def test_rac_khong_duoc_coi_la_dia_chi(self):
+        self.assertEqual(ocr._diem_dia_chi("TỀ, Si. 7 9 HĐTIE si Bì có"), -1)
+
+    def test_dia_chi_that_duoc_diem_duong(self):
+        self.assertGreater(
+            ocr._diem_dia_chi("02-04 Đường số 34, Phường An Lạc"), 0
+        )
 
 
 if __name__ == "__main__":

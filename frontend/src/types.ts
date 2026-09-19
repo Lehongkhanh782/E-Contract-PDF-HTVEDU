@@ -12,7 +12,8 @@ export type OcrResult = {
   recognised: string[]
   missing: string[]
   is_suggestion_only: boolean
-  source_kind: 'image' | 'pdf'
+  source_kind?: 'image' | 'pdf'
+  files?: { index: number; source_kind?: string; recognised: string[]; error?: string }[]
   warning: string
   raw_text: string
 }
@@ -23,6 +24,7 @@ export type OcrStatus = {
   fields: string[]
   max_bytes: number
   max_pdf_pages: number
+  max_files: number
   note: string
 }
 

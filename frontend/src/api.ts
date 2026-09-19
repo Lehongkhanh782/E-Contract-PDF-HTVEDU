@@ -56,10 +56,10 @@ export function fetchOcrStatus() {
   return getJson<OcrStatus>('/api/ocr/status')
 }
 
-/** Gửi ảnh giấy tờ lên để máy đọc thử. Kết quả chỉ là gợi ý. */
-export async function readIdCard(file: File): Promise<OcrResult> {
+/** Gửi một đến ba tệp giấy tờ lên để máy đọc. Kết quả chỉ là gợi ý. */
+export async function readIdCard(files: File[]): Promise<OcrResult> {
   const form = new FormData()
-  form.append('anh', file)
+  for (const file of files) form.append('anh', file)
   const response = await fetch('/api/ocr', {
     ...WITH_SESSION,
     method: 'POST',

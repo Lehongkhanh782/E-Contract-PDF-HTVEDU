@@ -101,6 +101,7 @@ def ocr_status(_: User = Depends(current_user)) -> dict:
         "fields": ocr.TRUONG,
         "max_bytes": ocr.GIOI_HAN_BYTE,
         "max_pdf_pages": ocr.SO_TRANG_TOI_DA,
+        "max_files": ocr.SO_TEP_TOI_DA,
         "note": (
             "Kết quả chỉ là gợi ý để điền nhanh. Nhân sự phải đọc lại từng ô."
         ),
@@ -109,26 +110,36 @@ def ocr_status(_: User = Depends(current_user)) -> dict:
 
 @router.post("/ocr")
 async def ocr_giay_to(
-    anh: UploadFile = File(...),
+    anh: list[UploadFile] = File(...),
     _: User = Depends(current_user),
 ) -> JSONResponse:
-    """Đọc ảnh giấy tờ tùy thân và trả về các trường gợi ý.
+    """Đọc một đến ba tệp giấy tờ và trả về các trường gợi ý đã gộp.
 
-    Ảnh chỉ nằm trong bộ nhớ và thư mục tạm, không được lưu lại.
+    Tệp chỉ nằm trong bộ nhớ và thư mục tạm, không được lưu lại.
     """
-    # Đọc có giới hạn: không nạp cả tệp khổng lồ vào bộ nhớ rồi mới từ chối.
-    du_lieu = await anh.read(ocr.GIOI_HAN_BYTE + 1)
-    if len(du_lieu) > ocr.GIOI_HAN_BYTE:
+    if len(anh) > ocr.SO_TEP_TOI_DA:
         raise HTTPException(
-            status_code=413,
-            detail=(
-                f"Ảnh lớn hơn {ocr.GIOI_HAN_BYTE // (1024 * 1024)} MB. "
-                "Chụp lại hoặc giảm kích thước."
-            ),
+            status_code=400,
+            detail=f"Chỉ nhận tối đa {ocr.SO_TEP_TOI_DA} tệp một lần.",
         )
 
+    danh_sach = []
+    for tep in anh:
+        # Đọc có giới hạn: không nạp cả tệp khổng lồ vào bộ nhớ rồi mới từ chối.
+        du_lieu = await tep.read(ocr.GIOI_HAN_BYTE + 1)
+        if len(du_lieu) > ocr.GIOI_HAN_BYTE:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Tệp {tep.filename or ''} lớn hơn "
+                    f"{ocr.GIOI_HAN_BYTE // (1024 * 1024)} MB. "
+                    "Chụp lại hoặc giảm kích thước."
+                ),
+            )
+        danh_sach.append(du_lieu)
+
     try:
-        ket_qua = ocr.doc_giay_to(du_lieu)
+        ket_qua = ocr.gop_nhieu_tep(danh_sach)
     except ocr.AnhKhongHopLe as loi:
         raise HTTPException(status_code=400, detail=str(loi)) from loi
     except ocr.OcrKhongSanSang as loi:

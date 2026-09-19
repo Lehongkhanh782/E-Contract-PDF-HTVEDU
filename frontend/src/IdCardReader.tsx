@@ -28,6 +28,7 @@ export default function IdCardReader({
 }) {
   const [coTheDoc, setCoTheDoc] = useState<boolean | null>(null)
   const [nhanPdf, setNhanPdf] = useState(false)
+  const [soTepToiDa, setSoTepToiDa] = useState(3)
   const [trangThai, setTrangThai] = useState<Trang_thai>({ kind: 'idle' })
   const [ketQua, setKetQua] = useState<OcrResult | null>(null)
   const oChonTep = useRef<HTMLInputElement>(null)
@@ -37,15 +38,29 @@ export default function IdCardReader({
       .then((s) => {
         setCoTheDoc(s.available)
         setNhanPdf(s.pdf)
+        setSoTepToiDa(s.max_files)
       })
       .catch(() => setCoTheDoc(false))
   }, [])
 
-  async function xuLy(file: File) {
-    setTrangThai({ kind: 'busy', message: 'Đang đọc ảnh…' })
+  async function xuLy(files: File[]) {
+    if (files.length > soTepToiDa) {
+      setTrangThai({
+        kind: 'error',
+        message: `Chỉ chọn được tối đa ${soTepToiDa} tệp một lần.`,
+      })
+      return
+    }
+    setTrangThai({
+      kind: 'busy',
+      message:
+        files.length > 1
+          ? `Đang đọc ${files.length} tệp, mất khoảng ${files.length * 10} giây…`
+          : 'Đang đọc, mất khoảng 10 giây…',
+    })
     setKetQua(null)
     try {
-      const doc = await readIdCard(file)
+      const doc = await readIdCard(files)
       setKetQua(doc)
       setTrangThai({ kind: 'idle' })
 
@@ -112,17 +127,20 @@ export default function IdCardReader({
             : 'image/jpeg,image/png,image/webp'
         }
         hidden
+        multiple
         onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) xuLy(file)
+          const files = Array.from(e.target.files ?? [])
+          if (files.length) xuLy(files)
           // Cho phép chọn lại đúng tệp đó lần nữa.
           e.target.value = ''
         }}
       />
 
       <p className="hint">
+        Chọn cùng lúc tối đa {soTepToiDa} tệp — nên chọn cả mặt trước và mặt
+        sau.{' '}
         {nhanPdf
-          ? 'Nhận ảnh JPG, PNG, WebP và tệp PDF đã quét (tối đa 3 trang). '
+          ? 'Nhận ảnh JPG, PNG, WebP và tệp PDF đã quét. '
           : 'Nhận ảnh JPG, PNG hoặc WebP. '}
         Tệp chỉ được đọc rồi xóa, không lưu lại trên máy chủ.
       </p>
@@ -152,7 +170,10 @@ export default function IdCardReader({
           </table>
           <p className="hint">
             Đọc được {ketQua.recognised.length}/6 ô
-            {ketQua.source_kind === 'pdf' ? ' từ tệp PDF' : ' từ ảnh'}. Các ô đọc được đã điền
+            {ketQua.files && ketQua.files.length > 1
+              ? ` từ ${ketQua.files.length} tệp`
+              : ''}
+            . Các ô đọc được đã điền
             sẵn bên dưới, bạn sửa lại cho đúng rồi mới tạo hợp đồng.
           </p>
         </>

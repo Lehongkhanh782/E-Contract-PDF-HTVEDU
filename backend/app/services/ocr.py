@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import unicodedata
 from datetime import date
 from pathlib import Path
 
@@ -30,6 +31,8 @@ DINH_DANG_CHO_PHEP = {"JPEG", "PNG", "WEBP"}
 
 # Bản scan căn cước thường một hoặc hai mặt; chặn tệp nhiều trang.
 SO_TRANG_TOI_DA = 3
+# Mặt trước, mặt sau và một bản dự phòng là đủ cho mọi trường hợp thực tế.
+SO_TEP_TOI_DA = 3
 # 300 điểm/inch là mức Tesseract đọc tốt mà chưa tốn nhiều bộ nhớ.
 DO_PHAN_GIAI = 300
 # Bản scan đã được máy quét nhận chữ sẵn thì dùng luôn, khỏi đọc lại ảnh.
@@ -174,13 +177,12 @@ def _doc_pdf(du_lieu: bytes) -> str:
 
         phan = []
         for i, tep in enumerate(anh):
-            ket_qua = subprocess.run(
-                [tesseract, str(tep), str(Path(thu_muc) / f"ra{i}"), "-l", "vie"],
-                capture_output=True, text=True, timeout=THOI_GIAN_TOI_DA,
-            )
-            ra = Path(thu_muc) / f"ra{i}.txt"
-            if ket_qua.returncode == 0 and ra.is_file():
-                phan.append(ra.read_text(encoding="utf-8", errors="replace"))
+            rieng = Path(thu_muc) / f"trang{i}"
+            rieng.mkdir(exist_ok=True)
+            try:
+                phan.append(_doc_nhieu_luot(tesseract, tep, rieng))
+            except RuntimeError:
+                continue
         if not phan:
             raise RuntimeError("Tesseract không đọc được trang nào trong PDF")
         return "\n".join(phan)
@@ -205,18 +207,32 @@ def doc_van_ban(du_lieu: bytes) -> str:
         with tempfile.TemporaryDirectory(prefix="econtract_ocr_") as thu_muc:
             goc = Path(thu_muc) / "anh"
             goc.write_bytes(du_lieu)
-            ket_qua = subprocess.run(
-                [lenh, str(goc), str(Path(thu_muc) / "ra"), "-l", "vie"],
-                capture_output=True,
-                text=True,
-                timeout=THOI_GIAN_TOI_DA,
-            )
-            ra = Path(thu_muc) / "ra.txt"
-            if ket_qua.returncode != 0 or not ra.is_file():
-                raise RuntimeError("Tesseract không đọc được ảnh này")
-            return ra.read_text(encoding="utf-8", errors="replace")
+            return _doc_nhieu_luot(lenh, goc, Path(thu_muc))
     finally:
         _cong_ocr.release()
+
+
+# Ba chế độ bổ sung cho nhau: chế độ 3 đọc tốt các dòng liền mạch như số
+# và họ tên; chế độ 11 đọc chữ nằm rời rạc; chế độ 6 coi cả ảnh là một khối
+# nên bắt được dòng địa chỉ mà hai chế độ kia bỏ sót trên ảnh chụp nghiêng.
+# Gộp kết quả cả ba rồi mới tách trường.
+CHE_DO = (3, 11, 6)
+
+
+def _doc_nhieu_luot(tesseract: str, anh: Path, thu_muc: Path) -> str:
+    phan = []
+    for che_do in CHE_DO:
+        ra = thu_muc / f"ra{che_do}"
+        ket_qua = subprocess.run(
+            [tesseract, str(anh), str(ra), "-l", "vie", "--psm", str(che_do)],
+            capture_output=True, text=True, timeout=THOI_GIAN_TOI_DA,
+        )
+        tep = ra.with_suffix(".txt")
+        if ket_qua.returncode == 0 and tep.is_file():
+            phan.append(tep.read_text(encoding="utf-8", errors="replace"))
+    if not phan:
+        raise RuntimeError("Tesseract không đọc được ảnh này")
+    return "\n".join(phan)
 
 
 def _chuan_hoa_ngay(gia_tri: str) -> str | None:
@@ -268,8 +284,36 @@ CHUAN_HOA = {
 }
 
 
-# Ký tự máy quét hay thêm vào quanh nhãn, không phải nội dung thật.
-NHIEU = r"[\s:.\-–—_|~·•]+"
+# Máy quét đọc nhãn rất hay sai: "Số / No.:" thành "SIING;", "Date of
+# birth:" thành "Date of bifh:". Vì vậy không bám vào nhãn mà nhận dạng
+# theo hình dạng của chính dữ liệu, rồi chỉ dùng nhãn để chọn khi có nhiều
+# ứng viên.
+
+NHIEU = r"[\s:.\-–—_|~·•!/]+"
+
+# Dòng tiêu đề in hoa trên thẻ, không phải họ tên.
+KHONG_PHAI_TEN = (
+    "CỘNG HÒA", "XÃ HỘI", "CHỦ NGHĨA", "ĐỘC LẬP", "TỰ DO", "HẠNH PHÚC",
+    "SOCIALIST", "REPUBLIC", "INDEPENDENCE", "FREEDOM", "HAPPINESS",
+    "CĂN CƯỚC", "CÔNG DÂN", "CITIZEN", "IDENTITY", "CARD", "VIET NAM",
+    "VIỆT NAM", "CHỨNG MINH", "CỤC TRƯỞNG", "CẢNH SÁT", "CÔNG AN",
+    "DIRECTOR", "POLICE", "DEPARTMENT", "FULL NAME", "PLACE",
+    # Mặt sau thẻ và dấu chứng thực của phường, không phải họ tên.
+    "HĐND", "UBND", "UBNP", "HÀNH CHÍNH", "TRẬT TỰ", "QUẢN LÝ",
+    "CHỨNG THỰC", "QUYỂN SỐ", "CHỦ TỊCH", "VĂN PHÒNG", "CÔNG CHỨC",
+    "NGÓN TRỎ", "ĐẶC ĐIỂM", "NHẬN DẠNG", "BẢN SAO", "BẢN CHÍNH",
+    "GENERAL", "ADMINISTRATIVE", "MANAGEMENT", "SOCIAL", "ORDER",
+    "INDEX", "FINGER", "PERSONAL",
+)
+
+# Tuổi hợp lý của người lao động, dùng để loại ngày cấp và ngày hết hạn.
+TUOI_NHO_NHAT = 14
+TUOI_LON_NHAT = 80
+
+MAU_NGAY = re.compile(r"\b(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{4})\b")
+# Căn cước 12 số, chứng minh cũ 9 số. Cho phép khoảng trắng chen giữa.
+MAU_SO_12 = re.compile(r"(?<!\d)(\d[\s.]{0,2}){11}\d(?!\d)")
+MAU_SO_9 = re.compile(r"(?<!\d)(\d[\s.]{0,2}){8}\d(?!\d)")
 
 
 def _bo_nhieu(doan: str) -> str:
@@ -279,35 +323,221 @@ def _bo_nhieu(doan: str) -> str:
     return sach if len(sach) >= 2 else ""
 
 
+def _khong_dau(chuoi: str) -> str:
+    """Bỏ dấu tiếng Việt để so khớp nhãn bất kể máy đọc sai dấu."""
+    return "".join(
+        c for c in unicodedata.normalize("NFD", chuoi.lower())
+        if unicodedata.category(c) != "Mn"
+    )
+
+
+def _tim_so_giay_to(van_ban: str) -> str | None:
+    """Căn cước là dãy 12 số; không có thì thử chứng minh 9 số."""
+    for mau in (MAU_SO_12, MAU_SO_9):
+        for khop in mau.finditer(van_ban):
+            chi_so = re.sub(r"\D", "", khop.group(0))
+            if len(chi_so) in (9, 12):
+                return chi_so
+    return None
+
+
+def _tim_ten(dong: list[str]) -> str | None:
+    """Họ tên là dòng in hoa toàn bộ, nhiều chữ, không lẫn chữ số.
+
+    Ưu tiên dòng nằm ngay sau nhãn họ tên nếu nhận ra được nhãn đó.
+    """
+    def hop_le(d: str) -> bool:
+        sach = _bo_nhieu(d)
+        if not (5 <= len(sach) <= 60):
+            return False
+        if re.search(r"\d", sach):
+            return False
+        if not re.fullmatch(r"[^\W\d_]+(?:\s+[^\W\d_]+){1,5}", sach):
+            return False
+        if sach != sach.upper():
+            return False
+        thuong = _khong_dau(sach)
+        return not any(_khong_dau(x) in thuong for x in KHONG_PHAI_TEN)
+
+    for i, d in enumerate(dong):
+        if "ho va ten" in _khong_dau(d) or "full name" in _khong_dau(d):
+            phan_sau = _bo_nhieu(re.split(r"(?i)full\s*name", d)[-1])
+            if hop_le(phan_sau):
+                return re.sub(r"\s+", " ", _bo_nhieu(phan_sau))
+            for tiep in dong[i + 1:]:
+                if _bo_nhieu(tiep) and hop_le(tiep):
+                    return re.sub(r"\s+", " ", _bo_nhieu(tiep))
+                if _bo_nhieu(tiep):
+                    break
+    ung_vien = [d for d in dong if hop_le(d)]
+    return re.sub(r"\s+", " ", _bo_nhieu(ung_vien[0])) if ung_vien else None
+
+
+def _tim_ngay_sinh(dong: list[str]) -> str | None:
+    """Trong các ngày đọc được, chọn ngày hợp lý với tuổi người lao động."""
+    hom_nay = date.today()
+
+    def hop_le(ngay: date) -> bool:
+        tuoi = (hom_nay - ngay).days / 365.25
+        return TUOI_NHO_NHAT <= tuoi <= TUOI_LON_NHAT
+
+    uu_tien: list[date] = []
+    con_lai: list[date] = []
+    for d in dong:
+        gan_nhan = "sinh" in _khong_dau(d) or "birth" in _khong_dau(d)
+        for khop in MAU_NGAY.finditer(d):
+            ngay, thang, nam = (int(x) for x in khop.groups())
+            try:
+                gia_tri = date(nam, thang, ngay)
+            except ValueError:
+                continue
+            if not hop_le(gia_tri):
+                continue
+            (uu_tien if gan_nhan else con_lai).append(gia_tri)
+    chon = uu_tien or con_lai
+    return chon[0].isoformat() if chon else None
+
+
+def _tim_gioi_tinh(dong: list[str]) -> str | None:
+    """Giá trị có thể nằm cùng dòng nhãn hoặc ở dòng kế tiếp."""
+
+    def doc(doan: str) -> str | None:
+        thuong = _khong_dau(doan)
+        if "Nữ" in doan or re.search(r"\bnu\b", thuong):
+            return "Nữ"
+        if re.search(r"\bnam\b", thuong):
+            return "Nam"
+        return None
+
+    for i, d in enumerate(dong):
+        thuong = _khong_dau(d)
+        if "gioi tinh" not in thuong and not re.search(r"\bsex\b", thuong):
+            continue
+        # Bỏ phần nhãn rồi mới đọc, để chữ "Nam" trong "Việt Nam" ở cùng
+        # dòng không bị hiểu nhầm thành giới tính.
+        sau_nhan = re.split(r"(?i)sex|giới tính|gioi tinh", d)[-1]
+        sau_nhan = re.split(r"(?i)quốc tịch|quoc tich|nationality", sau_nhan)[0]
+        ket_qua = doc(sau_nhan)
+        if ket_qua:
+            return ket_qua
+        for tiep in dong[i + 1:]:
+            if _bo_nhieu(tiep):
+                return doc(tiep)
+    return None
+
+
+def _tim_quoc_tich(van_ban: str) -> str | None:
+    if "viet nam" in _khong_dau(van_ban):
+        return "Việt Nam"
+    return None
+
+
+# Từ hay gặp trong địa chỉ Việt Nam, dùng để nhận ra mảnh nào là địa chỉ.
+TU_DIA_CHI = (
+    "phuong", "xa", "quan", "huyen", "thanh pho", "tinh", "thi tran",
+    "duong", "pho", "ngo", "hem", "to", "khu pho", "ap", "thon",
+)
+# Từ của nhãn, mảnh nào chứa thì không phải nội dung địa chỉ.
+TU_NHAN = (
+    "place", "residence", "origin", "date", "expiry", "gia tri", "full name",
+    "nationality", "sex", "no.", "card", "identity",
+    # Chữ in sẵn ở mặt sau thẻ và dấu chứng thực của phường. Không chặn thì
+    # những dòng này bị chấm điểm cao vì có dấu phẩy và chữ "quận".
+    "hanh chinh", "trat tu", "xa hoi", "canh sat", "cong an", "chung thuc",
+    "quyen so", "chu tich", "van phong", "cong chuc", "ngon tro",
+    "dac diem", "nhan dang", "ban sao", "ban chinh", "cuc truong",
+    "director", "general", "administrative", "management", "index finger",
+)
+
+
+def _ten_rieng(doan: str) -> list[str]:
+    """Các từ viết hoa chữ đầu, kiểu tên riêng.
+
+    Không dùng dải ký tự như [A-ZÀ-Ỹ][a-zà-ỹ]+ vì trong bảng mã Unicode,
+    dải à-ỹ chứa lẫn cả chữ hoa tiếng Việt như Ề và Đ, khiến rác kiểu "TỀ"
+    bị đếm nhầm là tên riêng.
+    """
+    return [t for t in re.findall(r"[^\W\d_]{2,}", doan)
+            if t[0].isupper() and t[1:].islower()]
+
+
+def _diem_dia_chi(manh: str) -> int:
+    """Mảnh càng giống địa chỉ càng nhiều điểm; nhãn và rác bị loại."""
+    thuong = _khong_dau(manh)
+    if any(t in thuong for t in TU_NHAN):
+        return -1
+    if len(manh) < 10:
+        return -1
+    # Quá nhiều ký tự lạ nghĩa là máy đọc hỏng đoạn đó.
+    la = sum(1 for c in manh if not (c.isalnum() or c in " ,./-"))
+    if la > len(manh) * 0.15:
+        return -1
+    # Địa chỉ luôn có ít nhất ba tên riêng: đường, phường, quận hoặc tỉnh.
+    # Rác máy đọc hiếm khi ghép đủ ba từ viết hoa đúng kiểu.
+    ten_rieng = _ten_rieng(manh)
+    if len(ten_rieng) < 3:
+        return -1
+    # Nơi thường trú trên căn cước luôn ngăn cách bằng dấu phẩy. Thiếu dấu
+    # phẩy thì gần như chắc chắn là chữ in sẵn chứ không phải địa chỉ.
+    if "," not in manh:
+        return -1
+    diem = manh.count(",") * 3
+    diem += sum(2 for t in TU_DIA_CHI if t in thuong)
+    diem += len(ten_rieng)
+    # Số nhà chỉ vài chữ số; dãy dài hơn gần như luôn là rác dính vào.
+    diem -= 4 * len(MAU_SO_DAI.findall(manh))
+    return diem
+
+
+# Đoạn chỉ gồm chữ, khoảng trắng và dấu phẩy: loại được rác lẫn chữ số,
+# nhưng cũng cắt mất số nhà.
+MAU_DOAN_CHU = re.compile(r"(?:[^\W\d_]|[ ,])+")
+# Ký tự lạ dùng làm chỗ cắt: giữ lại được số nhà và tên đường có số.
+MAU_KY_TU_LA = re.compile(r"[^\w\sÀ-ỹ,./-]+")
+# Dãy bốn chữ số trở lên giữa địa chỉ thường là rác máy đọc nhầm.
+MAU_SO_DAI = re.compile(r"(?<!\d)\d{4,}(?!\d)")
+
+
+def _cat_manh(dong: str) -> list[str]:
+    """Cắt một dòng thành ứng viên theo hai cách rồi để bộ chấm điểm chọn.
+
+    Cách chỉ lấy chữ thắng trên ảnh chụp nhiều nhiễu; cách cắt theo ký tự
+    lạ thắng trên bản quét sạch, vì giữ được số nhà.
+    """
+    manh = [m.group(0) for m in MAU_DOAN_CHU.finditer(dong)]
+    manh += MAU_KY_TU_LA.split(dong)
+    return [x for x in (m.strip(" ,.-") for m in manh) if len(x) >= 10]
+
+
+def _tim_dia_chi(dong: list[str]) -> str | None:
+    """Địa chỉ thường trú hay xuống dòng và lẫn rác, nên chấm điểm từng mảnh.
+
+    Lấy mảnh giống địa chỉ nhất; nếu có mảnh dạng số nhà kèm tên đường ở
+    gần đó thì ghép vào phía trước.
+    """
+    tot_nhat: tuple[int, int, str] | None = None
+    for i, d in enumerate(dong):
+        for manh in _cat_manh(d):
+            diem = _diem_dia_chi(manh)
+            if diem > 0 and (tot_nhat is None or diem > tot_nhat[0]):
+                tot_nhat = (diem, i, re.sub(r"\s+", " ", manh))
+    if tot_nhat is None:
+        return None
+
+    return tot_nhat[2]
+
+
 def tach_truong(van_ban: str) -> dict[str, str | None]:
     """Tách các trường từ văn bản thô. Không chắc thì trả None."""
-    dong = [d.strip() for d in van_ban.splitlines()]
-    ket_qua: dict[str, str | None] = {ten: None for ten in TRUONG}
-
-    for i, hien_tai in enumerate(dong):
-        if not hien_tai:
-            continue
-        for ten, mau in NHAN:
-            if ket_qua[ten] is not None:
-                continue
-            khop = re.search(mau, hien_tai, re.IGNORECASE)
-            if not khop:
-                continue
-            # Giá trị nằm ngay sau dấu hai chấm, hoặc ở dòng có chữ kế tiếp.
-            # Máy quét hay thêm gạch hoặc chấm thừa sau nhãn, ví dụ
-            # "Place of residence: -", nên phải bỏ nhiễu trước khi xét.
-            ung_vien = _bo_nhieu(hien_tai[khop.end():])
-            if not ung_vien:
-                for tiep in dong[i + 1:]:
-                    sach = _bo_nhieu(tiep)
-                    if sach:
-                        ung_vien = sach
-                        break
-            if ung_vien:
-                ket_qua[ten] = CHUAN_HOA[ten](ung_vien)
-            break
-
-    return ket_qua
+    dong = [d.strip() for d in van_ban.splitlines() if d.strip()]
+    return {
+        "identity_number": _tim_so_giay_to(van_ban),
+        "full_name": _tim_ten(dong),
+        "birth_date": _tim_ngay_sinh(dong),
+        "gender": _tim_gioi_tinh(dong),
+        "nationality": _tim_quoc_tich(van_ban),
+        "permanent_address": _tim_dia_chi(dong),
+    }
 
 
 def doc_giay_to(du_lieu: bytes) -> dict:
@@ -332,6 +562,61 @@ def doc_giay_to(du_lieu: bytes) -> dict:
 def ho_tro_pdf() -> bool:
     """Máy chủ có công cụ đọc PDF không."""
     return all(shutil.which(t) for t in ("pdftoppm", "pdftotext"))
+
+
+def gop_nhieu_tep(danh_sach: list[bytes]) -> dict:
+    """Đọc nhiều tệp rồi gộp lại.
+
+    Mỗi trường lấy giá trị đầu tiên đọc được. Tệp nào không đọc ra gì thì
+    không làm hỏng kết quả của tệp khác, vì trường không chắc luôn là null.
+    """
+    if not danh_sach:
+        raise AnhKhongHopLe("Chưa chọn tệp nào")
+    if len(danh_sach) > SO_TEP_TOI_DA:
+        raise AnhKhongHopLe(
+            f"Chỉ nhận tối đa {SO_TEP_TOI_DA} tệp một lần; "
+            f"bạn đã chọn {len(danh_sach)}"
+        )
+
+    gop: dict[str, str | None] = {ten: None for ten in TRUONG}
+    tung_tep = []
+    van_ban = []
+    loi_cuoi: Exception | None = None
+
+    for thu_tu, du_lieu in enumerate(danh_sach, 1):
+        try:
+            ket_qua = doc_giay_to(du_lieu)
+        except (AnhKhongHopLe, OcrKhongSanSang, RuntimeError) as loi:
+            loi_cuoi = loi
+            tung_tep.append({"index": thu_tu, "error": str(loi),
+                             "recognised": []})
+            continue
+        for ten, gia_tri in ket_qua["fields"].items():
+            if gop[ten] is None and gia_tri:
+                gop[ten] = gia_tri
+        tung_tep.append({
+            "index": thu_tu,
+            "source_kind": ket_qua["source_kind"],
+            "recognised": ket_qua["recognised"],
+        })
+        van_ban.append(ket_qua["raw_text"])
+
+    doc_duoc = [ten for ten, gia_tri in gop.items() if gia_tri]
+    if not doc_duoc and loi_cuoi is not None:
+        raise loi_cuoi
+
+    return {
+        "fields": gop,
+        "recognised": doc_duoc,
+        "missing": [ten for ten in TRUONG if ten not in doc_duoc],
+        "is_suggestion_only": True,
+        "files": tung_tep,
+        "warning": (
+            "Đây chỉ là gợi ý do máy đọc. Máy thường nhầm dấu tiếng Việt, "
+            "nhất là ở họ tên. Đọc lại từng ô trước khi tạo hợp đồng."
+        ),
+        "raw_text": "\n".join(van_ban).strip(),
+    }
 
 
 def san_sang() -> bool:
