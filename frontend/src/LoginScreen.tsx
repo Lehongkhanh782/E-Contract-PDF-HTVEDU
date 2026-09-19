@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { ApiError, login } from './api'
+import Brand from './Brand'
 import type { Account } from './types'
 
 export default function LoginScreen({
@@ -30,7 +31,7 @@ export default function LoginScreen({
   return (
     <div className="page login-page">
       <form className="card login-card" onSubmit={submit}>
-        <h1>Đăng nhập</h1>
+        <Brand full />
         <p className="hint">
           Hệ thống tạo hợp đồng lao động cho 4 cơ sở. Chỉ tài khoản được cấp
           mới sử dụng được.

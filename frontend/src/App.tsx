@@ -11,6 +11,7 @@ import {
 } from './api'
 import { Field, Section, Select, TextArea } from './components'
 import { demoForm, digitsOnly, emptyForm, formatMoney } from './defaults'
+import Brand from './Brand'
 import IdCardReader from './IdCardReader'
 import LoginScreen from './LoginScreen'
 import type { Account, ContractForm, Position, PreviewResponse, Unit } from './types'
@@ -248,7 +249,7 @@ function ContractWorkspace({
             Đăng xuất
           </button>
         </div>
-        <h1>Tạo bộ hợp đồng lao động</h1>
+        <Brand />
         <p className="notice">
           Bản thử nghiệm. Mọi PDF đều mang dấu <b>DỮ LIỆU GIẢ — CHƯA DÙNG KÝ</b>{' '}
           và không dùng để ký thật.

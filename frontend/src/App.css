@@ -1,16 +1,30 @@
+/*
+ * Màu lấy trực tiếp từ logo HTV EDU Group.
+ *
+ * Đỏ #8B1B1C đạt tỷ lệ tương phản 9.25 với nền trắng nên dùng được cho cả
+ * chữ lẫn nền. Vàng #C08734 chỉ đạt 3.11 nên chỉ dùng cho viền và chữ to;
+ * chỗ nào cần chữ vàng cỡ thường thì dùng --gold-text (#8A5E1E, đạt 5.67).
+ */
 :root {
-  --ink: #17202a;
-  --muted: #5b6672;
-  --line: #d9dee4;
-  --bg: #f4f6f8;
+  --ink: #241a1a;
+  --muted: #6b5f5f;
+  --line: #e2d9d6;
+  --bg: #faf7f5;
   --card: #ffffff;
-  --brand: #1f5f9e;
-  --brand-dark: #174a7c;
-  --warn-bg: #fff6e2;
-  --warn-line: #e0a63a;
+
+  --brand: #8b1b1c;
+  --brand-dark: #6e1214;
+  --brand-soft: #fbf0ef;
+
+  --gold: #c08734;
+  --gold-text: #8a5e1e;
+  --gold-soft: #fdf6e8;
+
+  --warn-bg: #fdf6e8;
+  --warn-line: #c08734;
   --error-bg: #fdecea;
-  --error-line: #c0392b;
-  --info-bg: #eaf3fb;
+  --error-line: #b02a20;
+  --info-bg: #fbf0ef;
   --radius: 10px;
 }
 
@@ -35,7 +49,38 @@ body {
 
 .top h1 {
   font-size: 1.5rem;
-  margin: 8px 0;
+  margin: 0;
+  color: var(--brand);
+  line-height: 1.25;
+}
+
+/* ---- Khối thương hiệu ---- */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0 10px;
+}
+
+/* Bản rút gọn chỉ có ngọn lửa nên cao và hẹp; canh theo chiều cao. */
+.brand img {
+  height: 44px;
+  width: auto;
+  flex: none;
+}
+
+.brand-text {
+  min-width: 0;
+}
+
+.brand-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--gold-text);
+  margin: 0 0 2px;
 }
 
 .notice {
@@ -56,8 +101,23 @@ body {
 }
 
 .card h2 {
+  color: var(--brand);
+}
+
+.card h2 {
   font-size: 1.05rem;
   margin: 0 0 4px;
+}
+
+/* Vạch vàng mảnh dưới tiêu đề mục, lấy từ chữ trong logo. */
+.card h2::after {
+  content: '';
+  display: block;
+  width: 34px;
+  height: 3px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--gold);
 }
 
 .grid {
@@ -177,7 +237,7 @@ button.disclosure {
   border: none;
   background: none;
   padding: 0;
-  color: var(--ink);
+  color: var(--brand);
   font-weight: 600;
   font-size: 1.05rem;
   text-align: left;
@@ -282,6 +342,24 @@ table.calc tr.highlight td {
 .login-card h1 {
   font-size: 1.3rem;
   margin: 0;
+  color: var(--brand);
+}
+
+.login-card .brand {
+  flex-direction: column;
+  text-align: center;
+  gap: 8px;
+  padding: 0 0 4px;
+}
+
+.login-card .brand img {
+  height: auto;
+  width: 150px;
+}
+
+/* Vạch vàng trên cùng thẻ đăng nhập, nhắc lại màu chữ trong logo. */
+.login-card {
+  border-top: 4px solid var(--gold);
 }
 
 .login-card .hint {

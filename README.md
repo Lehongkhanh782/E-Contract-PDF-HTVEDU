@@ -1,7 +1,21 @@
-# E-Contract-PDF-HTVEDU
+# HTV EDU Group — Hệ thống hợp đồng lao động
 
 Ứng dụng tạo hợp đồng lao động, phụ lục lương và thỏa thuận trách nhiệm
 cho 4 đơn vị: Vườn Sáng Tạo, Victoria, Gấu Panda, Đại Dương Xanh.
+
+## Màu thương hiệu
+
+Lấy trực tiếp từ logo, đã kiểm tra độ tương phản theo chuẩn WCAG.
+
+| Biến | Mã màu | Tương phản trên nền trắng | Dùng cho |
+| --- | --- | ---: | --- |
+| `--brand` | `#8B1B1C` | 9.25 (AAA) | Chữ, nền nút, tiêu đề mục |
+| `--brand-dark` | `#6E1214` | 11.93 (AAA) | Trạng thái di chuột |
+| `--gold` | `#C08734` | 3.11 | **Chỉ** viền và vạch trang trí |
+| `--gold-text` | `#8A5E1E` | 5.67 (AA) | Chữ màu vàng cỡ thường |
+
+Vàng `#C08734` không đạt chuẩn cho chữ cỡ thường nên không dùng làm màu
+chữ; chỗ nào cần chữ tông vàng thì dùng `--gold-text`.
 
 ## Tình trạng hiện tại
 
