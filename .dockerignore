@@ -1,0 +1,17 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+frontend/node_modules
+frontend/dist
+docs
+out
+*.pdf
+*.calculation.json
+
+# Không bao giờ đưa tài khoản vào image
+users.json
+backend/users.json
+*.secret
+.env*

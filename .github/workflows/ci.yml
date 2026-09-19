@@ -1,0 +1,135 @@
+name: Kiểm thử và đóng gói
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  kiem-thu-python:
+    name: Kiểm thử phần lõi và API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cài thư viện
+        run: pip install -r backend/requirements.txt
+
+      - name: Kiểm thử phần lõi
+        working-directory: contract_kit
+        run: python -m unittest test_core.py
+
+      - name: Kiểm thử API và đăng nhập
+        run: python -m unittest discover -s backend/tests -t backend
+
+  kiem-thu-giao-dien:
+    name: Kiểm tra kiểu dữ liệu và build giao diện
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Cài thư viện
+        working-directory: frontend
+        run: npm ci
+
+      - name: Kiểm tra kiểu dữ liệu
+        working-directory: frontend
+        run: npx tsc --noEmit -p tsconfig.app.json
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  tao-pdf-that:
+    name: Tạo PDF thật bằng LibreOffice
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cài LibreOffice và font
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libreoffice-writer fonts-dejavu-core fonts-liberation
+
+      - name: Cài thư viện
+        run: pip install -r contract_kit/requirements.txt
+
+      - name: Tạo PDF cho cả 4 đơn vị
+        working-directory: contract_kit
+        run: |
+          set -e
+          for don_vi in vuon_sang_tao victoria gau_panda dai_duong_xanh; do
+            echo "--- $don_vi ---"
+            python generate_demo.py --unit "$don_vi" --output "out/$don_vi.pdf"
+            # PDF hỏng thường nhỏ bất thường; chặn trường hợp file rỗng.
+            kich_thuoc=$(stat -c%s "out/$don_vi.pdf")
+            echo "$don_vi: $kich_thuoc bytes"
+            test "$kich_thuoc" -gt 50000
+          done
+
+      - name: Giữ lại PDF để tải về xem
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-thu-nghiem
+          path: contract_kit/out/*.pdf
+          retention-days: 7
+
+  dong-goi:
+    name: Build image Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: econtract:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Chạy thử image
+        run: |
+          set -e
+          docker run -d --name econtract -p 8000:8000 \
+            -e ECONTRACT_SECRET_KEY="$(head -c 48 /dev/urandom | base64 | tr -d '\n')" \
+            econtract:ci
+          # Chờ máy chủ sẵn sàng, tối đa 60 giây.
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/api/health > /dev/null; then
+              echo "Máy chủ đã sẵn sàng"
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/api/health
+          echo
+          # Chưa đăng nhập thì phải bị chặn.
+          ma=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/api/units)
+          echo "Gọi /api/units khi chưa đăng nhập: HTTP $ma"
+          test "$ma" = "401"
+          # Trang chủ phải trả về giao diện đã build.
+          curl -fsS http://127.0.0.1:8000/ | grep -q "<div id=\"root\">"
+          echo "Giao diện được phục vụ đúng"
+          docker logs econtract
+          docker rm -f econtract

@@ -6,6 +6,7 @@ hợp đồng, snapshot hay luồng duyệt; các phần đó theo bản đặc 
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -21,7 +22,13 @@ from generate_demo import (  # noqa: E402  (phụ thuộc thứ tự sys.path)
     render_docx,
 )
 
-DEMO_FONT = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+# Font cho dòng đánh dấu bản thử nghiệm in lên mỗi trang PDF. Đặt biến
+# ECONTRACT_DEMO_FONT để dùng font khác, ví dụ khi chạy trên Windows.
+FONT_CANDIDATES = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "C:/Windows/Fonts/arial.ttf",
+)
 MAX_PAGE_PASSES = 3
 
 
@@ -36,11 +43,22 @@ def _soffice() -> str:
 
 
 def _font() -> Path:
-    if DEMO_FONT.exists():
-        return DEMO_FONT
+    configured = os.environ.get("ECONTRACT_DEMO_FONT", "").strip()
+    if configured:
+        path = Path(configured)
+        if not path.is_file():
+            raise RuntimeError(
+                f"ECONTRACT_DEMO_FONT trỏ tới {path} nhưng không có file đó."
+            )
+        return path
+    for candidate in FONT_CANDIDATES:
+        path = Path(candidate)
+        if path.is_file():
+            return path
     raise RuntimeError(
-        "Không tìm thấy font cho dòng đánh dấu bản thử nghiệm. "
-        f"Cần file {DEMO_FONT}."
+        "Không tìm thấy font cho dòng đánh dấu bản thử nghiệm. Cài gói "
+        "fonts-dejavu-core, hoặc đặt biến ECONTRACT_DEMO_FONT trỏ tới một "
+        "file .ttf có hỗ trợ tiếng Việt."
     )
 
 
