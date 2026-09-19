@@ -4,7 +4,10 @@
     python -m app.usertool them hieutruong-vic --don-vi victoria
     python -m app.usertool doi-mat-khau nhansu
     python -m app.usertool xem
+    python -m app.usertool xuat
     python -m app.usertool khoa-bi-mat
+
+Công cụ này chỉ dùng thư viện chuẩn của Python, không cần cài gì thêm.
 
 Mật khẩu được gõ ẩn, không hiện lên màn hình và không nằm trong lịch sử
 lệnh. File users.json chỉ chứa mã băm, không chứa mật khẩu gốc.
@@ -107,6 +110,17 @@ def command_list(args: argparse.Namespace) -> None:
         print(f"{user['username']:<20} {user.get('display_name', ''):<28} {scope}")
 
 
+def command_export(args: argparse.Namespace) -> None:
+    """In danh sách tài khoản trên MỘT dòng để dán vào ECONTRACT_USERS."""
+    path = Path(args.file)
+    if not path.is_file():
+        sys.exit(f"Chưa có file {path}. Tạo tài khoản trước bằng lệnh them.")
+    data = _read(path)
+    if not data["users"]:
+        sys.exit("Chưa có tài khoản nào.")
+    print(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+
+
 def command_secret(_: argparse.Namespace) -> None:
     print("Đặt biến môi trường này trên máy chủ để không bị đăng xuất khi khởi động lại:")
     print()
@@ -135,6 +149,10 @@ def main() -> None:
 
     listing = sub.add_parser("xem", help="Xem danh sách tài khoản")
     listing.set_defaults(func=command_list)
+
+    export = sub.add_parser(
+        "xuat", help="In một dòng JSON để dán vào biến ECONTRACT_USERS")
+    export.set_defaults(func=command_export)
 
     secret = sub.add_parser("khoa-bi-mat", help="Sinh khóa ký phiên đăng nhập")
     secret.set_defaults(func=command_secret)
