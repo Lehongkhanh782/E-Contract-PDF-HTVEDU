@@ -20,3 +20,7 @@ uploads/
 Thumbs.db
 .idea/
 .vscode/
+
+# Node
+node_modules/
+frontend/dist/

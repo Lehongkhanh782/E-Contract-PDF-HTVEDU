@@ -1,0 +1,262 @@
+:root {
+  --ink: #17202a;
+  --muted: #5b6672;
+  --line: #d9dee4;
+  --bg: #f4f6f8;
+  --card: #ffffff;
+  --brand: #1f5f9e;
+  --brand-dark: #174a7c;
+  --warn-bg: #fff6e2;
+  --warn-line: #e0a63a;
+  --error-bg: #fdecea;
+  --error-line: #c0392b;
+  --info-bg: #eaf3fb;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.page {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.top h1 {
+  font-size: 1.5rem;
+  margin: 8px 0;
+}
+
+.notice {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 0 0 16px;
+  font-size: 0.92rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.card h2 {
+  font-size: 1.05rem;
+  margin: 0 0 4px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.req {
+  color: var(--error-line);
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  width: 100%;
+  min-width: 0;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: -1px;
+  border-color: var(--brand);
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 2px 0 0;
+}
+
+.readout {
+  background: var(--info-bg);
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.readout .label {
+  display: block;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+button {
+  font: inherit;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--brand);
+  background: #fff;
+  color: var(--brand);
+  cursor: pointer;
+  min-height: 44px;
+}
+
+button:hover:not(:disabled) {
+  background: var(--info-bg);
+}
+
+button.primary {
+  background: var(--brand);
+  color: #fff;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--brand-dark);
+}
+
+button.ghost {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.disclosure {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 1.05rem;
+  text-align: left;
+  width: 100%;
+}
+
+button.disclosure:hover {
+  background: none;
+  text-decoration: underline;
+}
+
+.alert {
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  margin: 8px 0;
+}
+
+.alert.warn {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+}
+
+.alert.error {
+  background: var(--error-bg);
+  border: 1px solid var(--error-line);
+}
+
+.alert.info {
+  background: var(--info-bg);
+  border: 1px solid var(--brand);
+}
+
+table.calc {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 0.93rem;
+}
+
+table.calc th,
+table.calc td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 6px;
+  text-align: left;
+}
+
+table.calc th {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+table.calc td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+table.calc tr.highlight th,
+table.calc tr.highlight td {
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--info-bg);
+}
+
+.foot {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 8px 0 32px;
+}
+
+@media (max-width: 520px) {
+  .page {
+    padding: 12px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .toolbar button {
+    flex: 1 1 100%;
+  }
+}

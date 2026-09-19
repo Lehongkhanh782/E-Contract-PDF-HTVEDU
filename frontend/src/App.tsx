@@ -1,0 +1,579 @@
+import { useEffect, useMemo, useState } from 'react'
+import { ApiError, downloadPdf, fetchPositions, fetchUnits, preview } from './api'
+import { Field, Section, Select, TextArea } from './components'
+import { demoForm, digitsOnly, emptyForm, formatMoney } from './defaults'
+import type { ContractForm, Position, PreviewResponse, Unit } from './types'
+import './App.css'
+
+type Status = { kind: 'idle' | 'busy' | 'error' | 'done'; message?: string }
+
+export default function App() {
+  const [units, setUnits] = useState<Unit[]>([])
+  const [positions, setPositions] = useState<Position[]>([])
+  const [form, setForm] = useState<ContractForm>(emptyForm)
+  const [result, setResult] = useState<PreviewResponse | null>(null)
+  const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [showSchedule, setShowSchedule] = useState(false)
+
+  useEffect(() => {
+    Promise.all([fetchUnits(), fetchPositions()])
+      .then(([unitBody, positionBody]) => {
+        setUnits(unitBody.units)
+        setPositions(positionBody.positions)
+      })
+      .catch((error: Error) =>
+        setLoadError(
+          `Không đọc được cấu hình từ máy chủ. ${error.message}. ` +
+            'Kiểm tra backend đã chạy ở cổng 8000 chưa.',
+        ),
+      )
+  }, [])
+
+  const selectedUnit = units.find((unit) => unit.unit_id === form.unit_id)
+  const selectedPosition = positions.find(
+    (position) => position.position_id === form.job.position_id,
+  )
+
+  /** Cập nhật một nhánh con của form mà giữ nguyên phần còn lại. */
+  function patch<K extends keyof ContractForm>(
+    key: K,
+    value: Partial<ContractForm[K]>,
+  ) {
+    setForm((current) => ({
+      ...current,
+      [key]: { ...(current[key] as object), ...value },
+    }))
+    setResult(null)
+  }
+
+  function setTop<K extends keyof ContractForm>(key: K, value: ContractForm[K]) {
+    setForm((current) => ({ ...current, [key]: value }))
+    setResult(null)
+  }
+
+  /**
+   * Chọn vị trí thì điền luôn các căn cứ bảo hiểm và công đoàn bằng mức lương
+   * cơ bản của vị trí đó. Đây chỉ là gợi ý theo hồ sơ mẫu; nhân sự vẫn sửa
+   * được và phải kiểm tra lại theo từng trường hợp.
+   */
+  function choosePosition(positionId: string) {
+    const position = positions.find((item) => item.position_id === positionId)
+    setForm((current) => ({
+      ...current,
+      job: { position_id: positionId },
+      compensation: position
+        ? {
+            ...current.compensation,
+            insurance_base: position.base_wage,
+            employer_union_base: position.base_wage,
+            employee_union_base: position.base_wage,
+          }
+        : current.compensation,
+    }))
+    setResult(null)
+  }
+
+  /**
+   * Ngày ký cũng là ngày hiệu lực hợp đồng theo quy tắc đã chốt. Các mốc của
+   * phụ lục lương và thỏa thuận trách nhiệm chưa được xác nhận là luôn trùng
+   * ngày ký, nên chỉ điền sẵn khi ô còn trống.
+   */
+  function chooseSigningDate(value: string) {
+    setForm((current) => ({
+      ...current,
+      signing_date: value,
+      salary_period: {
+        ...current.salary_period,
+        effective_from: current.salary_period.effective_from || value,
+      },
+      responsibility: {
+        commitment_from: current.responsibility.commitment_from || value,
+        commitment_to: current.responsibility.commitment_to,
+        liability_from: current.responsibility.liability_from || value,
+        liability_to: current.responsibility.liability_to,
+      },
+    }))
+    setResult(null)
+  }
+
+  function chooseEndDate(value: string) {
+    setForm((current) => ({
+      ...current,
+      contract: { ...current.contract, end_date: value },
+      salary_period: {
+        ...current.salary_period,
+        effective_to: current.salary_period.effective_to || value,
+      },
+      responsibility: {
+        ...current.responsibility,
+        commitment_to: current.responsibility.commitment_to || value,
+        liability_to: current.responsibility.liability_to || value,
+      },
+    }))
+    setResult(null)
+  }
+
+  const missing = useMemo(() => {
+    const required: [string, string][] = [
+      ['Cơ sở', form.unit_id],
+      ['Họ tên nhân viên', form.employee.full_name],
+      ['Mã nhân viên', form.employee.code],
+      ['Ngày sinh', form.employee.birth_date],
+      ['Số giấy tờ', form.employee.identity_number],
+      ['Ngày cấp', form.employee.identity_issue_date],
+      ['Nơi cấp', form.employee.identity_issuer],
+      ['Địa chỉ thường trú', form.employee.permanent_address],
+      ['Vị trí', form.job.position_id],
+      ['Ngày ký', form.signing_date],
+      ['Ngày kết thúc hợp đồng', form.contract.end_date],
+      ['Số tiền lương', form.compensation.salary_amount],
+      ['Căn cứ bảo hiểm', form.compensation.insurance_base],
+    ]
+    return required.filter(([, value]) => !value.trim()).map(([label]) => label)
+  }, [form])
+
+  async function runPreview() {
+    setStatus({ kind: 'busy', message: 'Đang tính…' })
+    try {
+      setResult(await preview(form))
+      setStatus({ kind: 'done', message: 'Đã tính xong. Kiểm tra bảng bên dưới.' })
+    } catch (error) {
+      setResult(null)
+      setStatus({
+        kind: 'error',
+        message: error instanceof ApiError ? error.message : String(error),
+      })
+    }
+  }
+
+  async function runDownload() {
+    setStatus({
+      kind: 'busy',
+      message: 'Đang dựng Word và chuyển PDF, mất khoảng 10 đến 30 giây…',
+    })
+    try {
+      const name = await downloadPdf(form)
+      setStatus({ kind: 'done', message: `Đã tải về: ${name}` })
+    } catch (error) {
+      setStatus({
+        kind: 'error',
+        message: error instanceof ApiError ? error.message : String(error),
+      })
+    }
+  }
+
+  const busy = status.kind === 'busy'
+  const blocked = missing.length > 0
+
+  return (
+    <div className="page">
+      <header className="top">
+        <h1>Tạo bộ hợp đồng lao động</h1>
+        <p className="notice">
+          Bản thử nghiệm. Mọi PDF đều mang dấu <b>DỮ LIỆU GIẢ — CHƯA DÙNG KÝ</b>{' '}
+          và không dùng để ký thật.
+        </p>
+      </header>
+
+      {loadError && <p className="alert error">{loadError}</p>}
+
+      <div className="toolbar">
+        <button type="button" onClick={() => setForm(demoForm)} disabled={busy}>
+          Điền hồ sơ mẫu để thử
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            setForm(emptyForm)
+            setResult(null)
+            setStatus({ kind: 'idle' })
+          }}
+          disabled={busy}
+        >
+          Xóa hết
+        </button>
+      </div>
+
+      <Section title="1. Chọn cơ sở">
+        <Select
+          label="Cơ sở"
+          required
+          value={form.unit_id}
+          onChange={(value) => setTop('unit_id', value)}
+          options={units.map((unit) => ({
+            value: unit.unit_id,
+            label: `${unit.display_name} (${unit.code})`,
+          }))}
+        />
+        {selectedUnit && (
+          <div className="field field-wide readout">
+            <div>
+              <span className="label">Bên sử dụng lao động</span>
+              {selectedUnit.legal_name}
+            </div>
+            <div>
+              <span className="label">Mã số thuế</span>
+              {selectedUnit.tax_code}
+            </div>
+            <div>
+              <span className="label">Địa chỉ</span>
+              {selectedUnit.address}
+            </div>
+            <div>
+              <span className="label">Người ký</span>
+              {selectedUnit.signatory_display} — {selectedUnit.signatory_title}
+            </div>
+          </div>
+        )}
+      </Section>
+
+      <Section title="2. Thông tin người lao động">
+        <Field
+          label="Họ và tên"
+          required
+          value={form.employee.full_name}
+          onChange={(value) => patch('employee', { full_name: value })}
+        />
+        <Field
+          label="Mã nhân viên"
+          required
+          value={form.employee.code}
+          onChange={(value) => patch('employee', { code: value })}
+        />
+        <Field
+          label="Ngày sinh"
+          type="date"
+          required
+          value={form.employee.birth_date}
+          onChange={(value) => patch('employee', { birth_date: value })}
+        />
+        <Field
+          label="Giới tính"
+          value={form.employee.gender}
+          onChange={(value) => patch('employee', { gender: value })}
+        />
+        <Field
+          label="Quốc tịch"
+          value={form.employee.nationality}
+          onChange={(value) => patch('employee', { nationality: value })}
+        />
+        <Field
+          label="Số CCCD / giấy tờ"
+          required
+          inputMode="numeric"
+          hint="9 đến 12 chữ số"
+          value={form.employee.identity_number}
+          onChange={(value) =>
+            patch('employee', { identity_number: digitsOnly(value) })
+          }
+        />
+        <Field
+          label="Ngày cấp"
+          type="date"
+          required
+          value={form.employee.identity_issue_date}
+          onChange={(value) => patch('employee', { identity_issue_date: value })}
+        />
+        <Field
+          label="Nơi cấp"
+          required
+          value={form.employee.identity_issuer}
+          onChange={(value) => patch('employee', { identity_issuer: value })}
+        />
+        <Field
+          label="Địa chỉ thường trú"
+          required
+          wide
+          value={form.employee.permanent_address}
+          onChange={(value) => patch('employee', { permanent_address: value })}
+        />
+      </Section>
+
+      <Section
+        title="3. Vị trí và thời hạn"
+        hint="Ngày ký cũng là ngày hiệu lực hợp đồng. Lương cơ bản lấy theo vị trí đã cấu hình, không nhập tay."
+      >
+        <Select
+          label="Vị trí"
+          required
+          value={form.job.position_id}
+          onChange={choosePosition}
+          options={positions.map((position) => ({
+            value: position.position_id,
+            label: `${position.title} — ${formatMoney(position.base_wage)} đ`,
+          }))}
+          hint={
+            selectedPosition
+              ? `Lương cơ bản ${formatMoney(selectedPosition.base_wage)} đ/tháng`
+              : undefined
+          }
+        />
+        <Field
+          label="Ngày ký (= ngày hiệu lực)"
+          type="date"
+          required
+          value={form.signing_date}
+          onChange={chooseSigningDate}
+        />
+        <Field
+          label="Ngày kết thúc hợp đồng"
+          type="date"
+          required
+          value={form.contract.end_date}
+          onChange={chooseEndDate}
+        />
+        <Field
+          label="Loại và thời hạn hợp đồng"
+          wide
+          value={form.contract.type_term_text}
+          onChange={(value) => patch('contract', { type_term_text: value })}
+        />
+        <Field
+          label="Phụ lục lương áp dụng từ"
+          type="date"
+          value={form.salary_period.effective_from}
+          onChange={(value) => patch('salary_period', { effective_from: value })}
+        />
+        <Field
+          label="Phụ lục lương áp dụng đến"
+          type="date"
+          value={form.salary_period.effective_to}
+          onChange={(value) => patch('salary_period', { effective_to: value })}
+        />
+      </Section>
+
+      <Section
+        title="4. Lương"
+        hint="Chọn Gross thì hệ thống trừ ra Net. Chọn Net thì hệ thống tìm Gross tương ứng. Các tỷ lệ khấu trừ hiện là chính sách minh họa, chưa xác nhận cho hồ sơ thật."
+      >
+        <Select
+          label="Kiểu lương"
+          required
+          value={form.compensation.salary_mode}
+          onChange={(value) =>
+            patch('compensation', { salary_mode: value as 'gross' | 'net' })
+          }
+          options={[
+            { value: 'gross', label: 'Gross — trước khấu trừ' },
+            { value: 'net', label: 'Net — thực nhận' },
+          ]}
+        />
+        <Field
+          label="Số tiền (đồng)"
+          required
+          inputMode="numeric"
+          hint={
+            form.compensation.salary_amount
+              ? `${formatMoney(form.compensation.salary_amount)} đ`
+              : 'Chỉ nhập số, ví dụ 6000000'
+          }
+          value={form.compensation.salary_amount}
+          onChange={(value) =>
+            patch('compensation', { salary_amount: digitsOnly(value) })
+          }
+        />
+        <Field
+          label="Căn cứ đóng bảo hiểm"
+          required
+          inputMode="numeric"
+          hint={formatMoney(form.compensation.insurance_base) || 'Tự điền theo vị trí'}
+          value={form.compensation.insurance_base}
+          onChange={(value) =>
+            patch('compensation', { insurance_base: digitsOnly(value) })
+          }
+        />
+        <Field
+          label="Thuế TNCN khấu trừ"
+          inputMode="numeric"
+          hint="Nhập 0 nếu không khấu trừ. Hệ thống không tự suy luận miễn thuế."
+          value={form.compensation.pit_withheld}
+          onChange={(value) =>
+            patch('compensation', { pit_withheld: digitsOnly(value) })
+          }
+        />
+        <Field
+          label="Căn cứ công đoàn (bên sử dụng lao động)"
+          inputMode="numeric"
+          value={form.compensation.employer_union_base}
+          onChange={(value) =>
+            patch('compensation', { employer_union_base: digitsOnly(value) })
+          }
+        />
+        <Field
+          label="Căn cứ đoàn phí (người lao động)"
+          inputMode="numeric"
+          value={form.compensation.employee_union_base}
+          onChange={(value) =>
+            patch('compensation', { employee_union_base: digitsOnly(value) })
+          }
+        />
+      </Section>
+
+      <section className="card">
+        <button
+          type="button"
+          className="disclosure"
+          onClick={() => setShowSchedule((open) => !open)}
+        >
+          {showSchedule ? '▾' : '▸'} 5. Lịch làm việc, kỳ trả lương và thỏa thuận
+          trách nhiệm
+          <span className="hint"> (đã điền sẵn, mở ra nếu cần sửa)</span>
+        </button>
+        {showSchedule && (
+          <div className="grid">
+            <Field
+              label="Kỳ trả lương"
+              wide
+              value={form.payment.window_text}
+              onChange={(value) => patch('payment', { window_text: value })}
+            />
+            <Field
+              label="Nhãn ngày trong tuần"
+              value={form.work_schedule.weekdays_label}
+              onChange={(value) => patch('work_schedule', { weekdays_label: value })}
+            />
+            <Field
+              label="Nhãn thứ bảy"
+              value={form.work_schedule.saturday_label}
+              onChange={(value) => patch('work_schedule', { saturday_label: value })}
+            />
+            <Field
+              label="Trong tuần — sáng"
+              value={form.work_schedule.weekday_morning}
+              onChange={(value) => patch('work_schedule', { weekday_morning: value })}
+            />
+            <Field
+              label="Trong tuần — chiều"
+              value={form.work_schedule.weekday_afternoon}
+              onChange={(value) =>
+                patch('work_schedule', { weekday_afternoon: value })
+              }
+            />
+            <Field
+              label="Thứ bảy — sáng"
+              value={form.work_schedule.saturday_morning}
+              onChange={(value) =>
+                patch('work_schedule', { saturday_morning: value })
+              }
+            />
+            <Field
+              label="Thứ bảy — chiều"
+              value={form.work_schedule.saturday_afternoon}
+              onChange={(value) =>
+                patch('work_schedule', { saturday_afternoon: value })
+              }
+            />
+            <TextArea
+              label="Nghỉ trưa trong tuần"
+              value={form.work_schedule.weekday_lunch}
+              onChange={(value) => patch('work_schedule', { weekday_lunch: value })}
+            />
+            <TextArea
+              label="Nghỉ trưa thứ bảy"
+              rows={2}
+              value={form.work_schedule.saturday_lunch}
+              onChange={(value) => patch('work_schedule', { saturday_lunch: value })}
+            />
+            <Field
+              label="Cam kết từ"
+              type="date"
+              value={form.responsibility.commitment_from}
+              onChange={(value) =>
+                patch('responsibility', { commitment_from: value })
+              }
+            />
+            <Field
+              label="Cam kết đến"
+              type="date"
+              value={form.responsibility.commitment_to}
+              onChange={(value) => patch('responsibility', { commitment_to: value })}
+            />
+            <Field
+              label="Trách nhiệm từ"
+              type="date"
+              value={form.responsibility.liability_from}
+              onChange={(value) => patch('responsibility', { liability_from: value })}
+            />
+            <Field
+              label="Trách nhiệm đến"
+              type="date"
+              value={form.responsibility.liability_to}
+              onChange={(value) => patch('responsibility', { liability_to: value })}
+            />
+          </div>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>6. Kiểm tra và tải về</h2>
+        {blocked && (
+          <p className="alert warn">
+            Còn thiếu: <b>{missing.join(', ')}</b>
+          </p>
+        )}
+        <div className="toolbar">
+          <button type="button" onClick={runPreview} disabled={busy || blocked}>
+            Tính thử
+          </button>
+          <button
+            type="button"
+            className="primary"
+            onClick={runDownload}
+            disabled={busy || blocked}
+          >
+            Tạo và tải PDF
+          </button>
+        </div>
+        {status.message && (
+          <p className={`alert ${status.kind === 'error' ? 'error' : 'info'}`}>
+            {status.message}
+          </p>
+        )}
+        {result && <CalculationTable result={result} />}
+      </section>
+
+      <footer className="foot">
+        Chưa có đăng nhập, lưu trữ hồ sơ, đọc ảnh giấy tờ hay đánh số hợp đồng
+        chính thức. Không nhập dữ liệu thật của nhân viên vào bản thử nghiệm này.
+      </footer>
+    </div>
+  )
+}
+
+function CalculationTable({ result }: { result: PreviewResponse }) {
+  const rows: [string, string][] = [
+    ['Lương cơ bản', result.calculation.base_wage],
+    ['Phụ cấp vị trí', result.calculation.position_allowance],
+    ['Tổng thu nhập (Gross)', result.calculation.gross_income],
+    ['Bảo hiểm người lao động đóng', result.calculation.employee_insurance],
+    ['Đoàn phí người lao động đóng', result.calculation.employee_union],
+    ['Thuế TNCN khấu trừ', result.calculation.pit_withheld],
+    ['Thực nhận (Net)', result.calculation.net_income],
+    ['Bảo hiểm đơn vị đóng', result.calculation.employer_insurance],
+    ['Công đoàn đơn vị đóng', result.calculation.employer_union],
+    ['Tổng chi phí của đơn vị', result.calculation.employer_total_cost],
+  ]
+  return (
+    <>
+      <table className="calc">
+        <tbody>
+          {rows.map(([label, value]) => (
+            <tr
+              key={label}
+              className={label.startsWith('Thực nhận') ? 'highlight' : undefined}
+            >
+              <th>{label}</th>
+              <td>{formatMoney(value)} đ</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="hint">
+        Chính sách khấu trừ: <b>{result.policy_status}</b>. Các tỷ lệ chỉ suy ra
+        từ phụ lục mẫu, chưa xác minh cho từng đối tượng thực tế.
+      </p>
+    </>
+  )
+}
