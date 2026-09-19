@@ -1,3 +1,24 @@
+export type SheetEmployee = {
+  code?: string
+  full_name?: string
+  birth_date?: string
+  gender?: string
+  nationality?: string
+  identity_number?: string
+  identity_issue_date?: string
+  identity_issuer?: string
+  permanent_address?: string
+  position?: string
+  unit?: string
+}
+
+export type EmployeeList = {
+  employees: SheetEmployee[]
+  columns: Record<string, number>
+  cached: boolean
+  note: string
+}
+
 export type OcrFields = {
   identity_number: string | null
   full_name: string | null

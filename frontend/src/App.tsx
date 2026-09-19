@@ -18,6 +18,7 @@ import {
   soThangHopDong,
 } from './defaults'
 import Brand, { MO_TA_PHIEN_BAN, PHIEN_BAN } from './Brand'
+import EmployeePicker from './EmployeePicker'
 import IdCardReader from './IdCardReader'
 import SalaryTable from './SalaryTable'
 import LoginScreen from './LoginScreen'
@@ -322,6 +323,14 @@ function ContractWorkspace({
         title="2. Thông tin người lao động"
         hint="Có thể tải ảnh giấy tờ lên để máy điền sẵn, nhưng máy hay nhầm dấu tiếng Việt nên phải đọc lại từng ô."
       >
+        <EmployeePicker
+          positions={positions}
+          disabled={busy}
+          onPick={(fields, positionId) => {
+            patch('employee', fields)
+            if (positionId) choosePosition(positionId)
+          }}
+        />
         <IdCardReader
           disabled={busy}
           onFilled={(fields) => patch('employee', fields)}

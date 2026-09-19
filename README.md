@@ -44,7 +44,7 @@ Mọi PDF do chương trình tạo ra đều mang dòng
 | `contract_kit/` | Phần lõi thử nghiệm: mẫu Word, cấu hình 4 đơn vị, bộ tính lương |
 | `backend/` | Máy chủ FastAPI, bọc phần lõi thành API |
 | `frontend/` | Website React TypeScript cho nhân sự nhập liệu |
-| `docs/` | Bản kế hoạch/đặc tả và hướng dẫn triển khai |
+| `docs/` | Bản kế hoạch/đặc tả, hướng dẫn triển khai và nối Google Sheet |
 | `Dockerfile` | Bản đóng gói để chạy trên máy chủ bất kỳ |
 
 Backend không định nghĩa lại quy tắc nghiệp vụ. Mức lương, thông tin đơn vị
@@ -131,6 +131,8 @@ cd frontend && npm run build && cd ..
 | POST | `/api/salary` | Tính lương chỉ từ vị trí và khối lương, cho bảng xem trước |
 | POST | `/api/preview` | Tính lương từ hồ sơ đầy đủ |
 | POST | `/api/generate` | Trả về PDF |
+| GET | `/api/sheets/status` | Tình trạng kết nối Google Sheet, kèm chẩn đoán |
+| GET | `/api/employees` | Danh sách nhân viên từ Google Sheet |
 | GET | `/api/ocr/status` | Máy chủ có đọc được ảnh không |
 | POST | `/api/ocr` | Đọc một đến ba tệp giấy tờ, trả về các trường gợi ý đã gộp |
 
@@ -182,6 +184,18 @@ Chọn đơn vị bằng một trong các giá trị `vuon_sang_tao`, `victoria`
 
 Thử chiều tính ngược từ Net, thêm `--input examples/employee_net_demo.json`.
 
+## Nối Google Sheet của ứng dụng nhân sự
+
+Có thể cho hệ thống đọc thẳng Google Sheet mà ứng dụng nhân sự đang dùng,
+để nhân sự chọn tên thay vì gõ lại. Xem
+**[`docs/NOI_GOOGLE_SHEET.md`](docs/NOI_GOOGLE_SHEET.md)**.
+
+Chưa nối thì khối chọn nhân viên tự ẩn, ứng dụng chạy như cũ.
+
+Dùng `google-auth` để ký khóa rồi gọi thẳng REST API bằng `httpx`, thay vì
+`google-api-python-client`: đo ra 524 KB so với 20 MB, đáng kể trên máy chủ
+512 MB.
+
 ## Nguyên tắc về dữ liệu
 
 File thật của nhân viên và hợp đồng đã phát hành **không được đưa vào Git**.
@@ -212,7 +226,7 @@ Xem mục 18 (lộ trình) và mục 22 (những thông tin còn cần chốt) t
 
 Phần chưa làm, theo thứ tự ưu tiên trong đặc tả:
 
-1. Database lưu hồ sơ nhân viên, không phải nhập lại mỗi lần
+1. Ghi lịch sử hợp đồng đã tạo vào một tab riêng trong cùng Google Sheet
 2. Luồng phát hành chính thức: đánh số, snapshot, chống phát hành trùng
 3. Ghi lại lịch sử thao tác của từng tài khoản
 

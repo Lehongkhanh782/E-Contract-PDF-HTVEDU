@@ -1,6 +1,7 @@
 import type {
   Account,
   ContractForm,
+  EmployeeList,
   OcrResult,
   OcrStatus,
   Position,
@@ -50,6 +51,11 @@ async function getJson<T>(path: string): Promise<T> {
 
 export function fetchMe() {
   return getJson<Account>('/api/me')
+}
+
+/** Danh sách nhân viên từ Google Sheet dùng chung, nếu đã nối. */
+export function fetchEmployees() {
+  return getJson<EmployeeList>('/api/employees')
 }
 
 export function fetchOcrStatus() {

@@ -16,7 +16,7 @@ from app import config
 from app.auth import User
 from app.deps import current_user, require_unit
 from app.schemas import ContractRequest, SalaryRequest
-from app.services import documents, ocr
+from app.services import documents, ocr, sheets
 
 logger = logging.getLogger("econtract.ocr")
 
@@ -162,6 +162,63 @@ async def ocr_giay_to(
         ) from loi
 
     return JSONResponse(ket_qua)
+
+
+@router.get("/sheets/status")
+def sheets_status(_: User = Depends(current_user)) -> dict:
+    """Tình trạng kết nối Google Sheet, kèm chẩn đoán để dò lỗi cấu hình."""
+    if not sheets.da_cau_hinh():
+        return {
+            "configured": False,
+            "note": (
+                "Chưa nối Google Sheet. Khai ECONTRACT_GOOGLE_KEY và "
+                "ECONTRACT_SHEET_ID trên máy chủ để bật."
+            ),
+        }
+
+    ket_qua: dict = {
+        "configured": True,
+        "service_account": sheets.email_tai_khoan_may(),
+    }
+    try:
+        ket_qua["tabs"] = sheets.danh_sach_tab()
+        du_lieu = sheets.danh_sach_nhan_vien()
+        ket_qua.update({
+            "connected": True,
+            "headers": du_lieu["headers"],
+            "columns": du_lieu["columns"],
+            "employee_count": len(du_lieu["employees"]),
+        })
+    except sheets.LoiSheet as loi:
+        ket_qua.update({"connected": False, "error": str(loi)})
+    return ket_qua
+
+
+@router.get("/employees")
+def employees(refresh: bool = False,
+              _: User = Depends(current_user)) -> dict:
+    """Danh sách nhân viên đọc từ Google Sheet dùng chung."""
+    try:
+        du_lieu = sheets.danh_sach_nhan_vien(lam_moi=refresh)
+    except sheets.ChuaCauHinh as loi:
+        raise HTTPException(status_code=503, detail=str(loi)) from loi
+    except sheets.LoiSheet as loi:
+        raise HTTPException(status_code=502, detail=str(loi)) from loi
+    except Exception as loi:
+        logger.exception("Lỗi ngoài dự tính khi đọc Google Sheet")
+        raise HTTPException(
+            status_code=502,
+            detail="Không đọc được Google Sheet. Xem lại cấu hình kết nối.",
+        ) from loi
+    return {
+        "employees": du_lieu["employees"],
+        "columns": du_lieu["columns"],
+        "cached": du_lieu["cached"],
+        "note": (
+            "Dữ liệu lấy từ Google Sheet dùng chung. Kiểm tra lại trước khi "
+            "tạo hợp đồng."
+        ),
+    }
 
 
 @router.post("/salary")

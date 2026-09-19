@@ -464,3 +464,35 @@ table.calc tr.phu th,
 table.calc tr.phu td {
   color: var(--muted);
 }
+
+/* ---- Chọn nhân viên từ Google Sheet ---- */
+
+.sheet-box {
+  background: var(--gold-soft);
+  border: 1px dashed var(--gold);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.sheet-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.sheet-list button {
+  width: 100%;
+  text-align: left;
+  border-color: var(--line);
+  color: var(--ink);
+  padding: 7px 10px;
+  min-height: 0;
+  font-weight: 400;
+}
+
+.sheet-list button:hover:not(:disabled) {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}

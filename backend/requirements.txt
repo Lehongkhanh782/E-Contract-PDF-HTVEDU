@@ -4,6 +4,8 @@ pydantic==2.10.4
 python-multipart==0.0.20
 itsdangerous==2.2.0
 pillow==11.1.0
+# Chỉ dùng để ký khóa tài khoản máy; gọi Google Sheets bằng httpx cho nhẹ.
+google-auth==2.38.0
 httpx==0.28.1
 
 # Các thư viện của phần lõi contract_kit
