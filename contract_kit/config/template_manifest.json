@@ -1,0 +1,33 @@
+{
+  "bundle_order": [
+    "employment_contract",
+    "salary_appendix",
+    "responsibility_agreement"
+  ],
+  "input_template_count": 2,
+  "logical_document_count": 3,
+  "templates": [
+    {
+      "template": "Hop_dong_va_phu_luc_template.docx",
+      "source_file": "Hợp Đồng Mầm non - BDM HD Mẫu 2026.docx",
+      "source_sha256": "ec6f97dd53cd814cd3dd2e5ff374ed8e708970bebda4c6bbf9ac9615818ae0c3",
+      "template_sha256": "d7c758650f656db72ece3f1855b8e8441d10725b03c88174f6c8cafe2c2604ed"
+    },
+    {
+      "template": "Thoa_thuan_trach_nhiem_template.docx",
+      "source_file": "Thoả Thuận Trách Nhiệm BDM IB025.docx",
+      "source_sha256": "25c25f2825df5d09bd87daa04ecd4467b5c3e823c9c028c5ab048daa6298e670",
+      "template_sha256": "ef44b1a45212f4dbc57d6cd54c7dc92938ed82c2abb95b61c0ad528c1672dce4"
+    }
+  ],
+  "changes": [
+    "Contract copy: removed empty middle section producing blank page; appendix margins set for A4 print.",
+    "Responsibility copy: Letter changed to A4; source clauses retained, page count becomes a variable.",
+    "Responsibility header: replaced tab-based alignment with a fixed two-column borderless table to keep both headings in their own columns on A4.",
+    "Contract heading 3.2 kept with its following paragraph to prevent an orphan heading."
+  ],
+  "status": "draft_for_review",
+  "responsibility_amount_in_source": "20000000",
+  "responsibility_terms_approved": false,
+  "production_issuance_supported": false
+}

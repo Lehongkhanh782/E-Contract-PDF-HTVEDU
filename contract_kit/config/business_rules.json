@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.2",
+  "source": "User confirmation in this conversation",
+  "salary_currency": "VND",
+  "salary_period": "month",
+  "contract_date": {
+    "input_field": "signing_date",
+    "label": "Ngày ký / Ngày hiệu lực hợp đồng",
+    "required": true,
+    "manual_input": true,
+    "default": null,
+    "derived_fields": [
+      "signing.date_long",
+      "contract.start_date"
+    ],
+    "rule": "contract.start_date = signing_date",
+    "salary_and_responsibility_date_sync": "not_yet_confirmed"
+  },
+  "salary_input": {
+    "mode_field": "compensation.salary_mode",
+    "amount_field": "compensation.salary_amount",
+    "options": [
+      {
+        "value": "gross",
+        "label": "Gross — trước khấu trừ"
+      },
+      {
+        "value": "net",
+        "label": "Net — thực nhận"
+      }
+    ],
+    "mode_required": true,
+    "mode_default": null,
+    "base_wage_source": "job.position_id -> positions.base_wage",
+    "residual_income_allocation_status": "pending_user_confirmation",
+    "deduction_policy_status": "example_only_pending_confirmation"
+  },
+  "positions": [
+    {
+      "position_id": "principal",
+      "title": "Hiệu trưởng",
+      "role_label": "Hiệu trưởng",
+      "base_wage": "7000000"
+    },
+    {
+      "position_id": "preschool_teacher",
+      "title": "Giáo viên mầm non",
+      "role_label": "Giáo viên",
+      "base_wage": "5310000"
+    },
+    {
+      "position_id": "english_teacher",
+      "title": "Giáo viên Tiếng Anh",
+      "role_label": "Giáo viên",
+      "base_wage": "5310000"
+    },
+    {
+      "position_id": "nanny",
+      "title": "Bảo mẫu",
+      "role_label": "Bảo mẫu",
+      "base_wage": "5310000"
+    },
+    {
+      "position_id": "admissions_marketing",
+      "title": "Tuyển sinh Marketing",
+      "role_label": "Nhân viên tuyển sinh Marketing",
+      "base_wage": "5310000"
+    }
+  ],
+  "positions_status": "base_wages_confirmed_by_user",
+  "base_wage_policy_effective_from": null,
+  "historical_policy_dates": "not_supplied",
+  "document_applicability": "Source teacher clauses still require per-role review"
+}

@@ -1,0 +1,22 @@
+# Môi trường Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Kết quả chạy thử - KHÔNG đưa lên Git
+out/
+*.pdf
+*.calculation.json
+
+# Dữ liệu thật của nhân viên - TUYỆT ĐỐI KHÔNG đưa lên Git
+data/
+uploads/
+*.env
+.env*
+
+# Hệ điều hành / trình soạn thảo
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
