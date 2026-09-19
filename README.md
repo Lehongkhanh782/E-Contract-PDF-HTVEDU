@@ -9,13 +9,22 @@ Lấy trực tiếp từ logo, đã kiểm tra độ tương phản theo chuẩn
 
 | Biến | Mã màu | Tương phản trên nền trắng | Dùng cho |
 | --- | --- | ---: | --- |
-| `--brand` | `#8B1B1C` | 9.25 (AAA) | Chữ, nền nút, tiêu đề mục |
-| `--brand-dark` | `#6E1214` | 11.93 (AAA) | Trạng thái di chuột |
+| `--brand` | `#731A1B` | 11.10 (AAA) | Chữ, nền nút, tiêu đề mục |
+| `--brand-dark` | `#5C1415` | 13.60 (AAA) | Trạng thái di chuột |
 | `--gold` | `#C08734` | 3.11 | **Chỉ** viền và vạch trang trí |
 | `--gold-text` | `#8A5E1E` | 5.67 (AA) | Chữ màu vàng cỡ thường |
 
 Vàng `#C08734` không đạt chuẩn cho chữ cỡ thường nên không dùng làm màu
 chữ; chỗ nào cần chữ tông vàng thì dùng `--gold-text`.
+
+Đỏ `#731A1B` là bản đậm và trầm hơn màu `#8B1B1C` lấy thẳng từ logo: độ
+sáng 28% thay vì 33%, độ bão hòa 63% thay vì 67%.
+
+## Số phiên bản
+
+Chân trang hiện số phiên bản, khai trong `frontend/src/Brand.tsx`. Tăng số
+này mỗi khi có thay đổi người dùng nhìn thấy được, để biết máy chủ đã chạy
+bản mới hay trình duyệt còn giữ bản cũ trong bộ nhớ đệm.
 
 ## Tình trạng hiện tại
 

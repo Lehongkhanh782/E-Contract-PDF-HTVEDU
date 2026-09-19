@@ -1,9 +1,12 @@
 /*
  * Màu lấy trực tiếp từ logo HTV EDU Group.
  *
- * Đỏ #8B1B1C đạt tỷ lệ tương phản 9.25 với nền trắng nên dùng được cho cả
- * chữ lẫn nền. Vàng #C08734 chỉ đạt 3.11 nên chỉ dùng cho viền và chữ to;
- * chỗ nào cần chữ vàng cỡ thường thì dùng --gold-text (#8A5E1E, đạt 5.67).
+ * Đỏ #731A1B đạt tỷ lệ tương phản 11.10 với nền trắng nên dùng được cho cả
+ * chữ lẫn nền. Đây là bản đậm và trầm hơn màu #8B1B1C lấy thẳng từ logo:
+ * độ sáng 28% thay vì 33%, độ bão hòa 63% thay vì 67%.
+ *
+ * Vàng #C08734 chỉ đạt 3.11 nên chỉ dùng cho viền và chữ to; chỗ nào cần
+ * chữ vàng cỡ thường thì dùng --gold-text (#8A5E1E, đạt 5.67).
  */
 :root {
   --ink: #241a1a;
@@ -12,9 +15,9 @@
   --bg: #faf7f5;
   --card: #ffffff;
 
-  --brand: #8b1b1c;
-  --brand-dark: #6e1214;
-  --brand-soft: #fbf0ef;
+  --brand: #731a1b;
+  --brand-dark: #5c1415;
+  --brand-soft: #fbf1f0;
 
   --gold: #c08734;
   --gold-text: #8a5e1e;
@@ -24,7 +27,7 @@
   --warn-line: #c08734;
   --error-bg: #fdecea;
   --error-line: #b02a20;
-  --info-bg: #fbf0ef;
+  --info-bg: #fbf1f0;
   --radius: 10px;
 }
 
@@ -411,4 +414,15 @@ table.ocr-table td {
   text-align: left;
   white-space: normal;
   font-variant-numeric: normal;
+}
+
+/* Số phiên bản: để người dùng biết máy chủ đã chạy bản mới chưa. */
+.version {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--gold-text);
 }

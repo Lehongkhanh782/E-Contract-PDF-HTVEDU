@@ -11,7 +11,7 @@ import {
 } from './api'
 import { Field, Section, Select, TextArea } from './components'
 import { demoForm, digitsOnly, emptyForm, formatMoney } from './defaults'
-import Brand from './Brand'
+import Brand, { MO_TA_PHIEN_BAN, PHIEN_BAN } from './Brand'
 import IdCardReader from './IdCardReader'
 import LoginScreen from './LoginScreen'
 import type { Account, ContractForm, Position, PreviewResponse, Unit } from './types'
@@ -640,6 +640,10 @@ function ContractWorkspace({
         hành chính thức, nên mỗi lần tạo hợp đồng đều phải nhập lại từ đầu và
         PDF chưa dùng để ký. Công thức bảo hiểm, công đoàn và thuế vẫn là
         chính sách minh họa, chưa được kế toán xác nhận.
+        <br />
+        <span className="version">
+          Phiên bản {PHIEN_BAN} — {MO_TA_PHIEN_BAN}
+        </span>
       </footer>
     </div>
   )
