@@ -125,7 +125,10 @@ docker run --rm -p 8000:8000 \
   econtract
 ```
 
-Máy chủ cần ít nhất **1 GB bộ nhớ**; 512 MB thường không đủ cho LibreOffice.
+Máy chủ **512 MB là đủ**. Đã đo: lúc nghỉ 66 MB, dựng một bộ PDF lên đỉnh
+305 MB, và con số này không tăng khi nhiều người bấm cùng lúc vì ứng dụng
+xếp hàng, mỗi lúc chỉ dựng một bộ. Máy nhiều bộ nhớ hơn có thể cho chạy
+song song bằng `ECONTRACT_MAX_PDF_SONG_SONG`; mỗi luồng cần khoảng 300 MB.
 
 ## Cách chạy riêng phần lõi
 

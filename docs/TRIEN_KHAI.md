@@ -27,7 +27,8 @@ tự dựng lên.
 ## Phần 1. Chuẩn bị hai chuỗi bí mật
 
 > **Bỏ qua phần này** nếu bạn dùng Cách 1 ở Phần 3A (chạy script trong
-> Cloud Shell) — script tự lo hết. Phần này dành cho Cách 2 và cho Render.
+> Cloud Shell) — script tự lo hết. Phần này **bắt buộc** nếu bạn dùng
+> Render hoặc Cách 2.
 
 Mở phần mềm dòng lệnh trên máy bạn (Windows: bấm phím Windows, gõ
 `PowerShell`, mở ra), rồi chạy trong thư mục dự án:
@@ -67,21 +68,63 @@ Xem lại danh sách:
 
 ## Phần 2. Chọn nơi đặt
 
-| | **Google Cloud Run** | **Render** |
+### Google Cloud có thể đòi đặt cọc trước
+
+Khi khai thẻ, Google có thể hiện bảng **"One-time prepayment required"** đòi
+nộp trước một khoản, ở Việt Nam thường là **800.000 đồng**.
+
+Đây là **tiền đặt cọc, không phải phí**. Nó được cộng vào tài khoản của bạn
+và Google hoàn lại phần chưa dùng nếu bạn đóng tài khoản thanh toán. Khoản
+này chỉ phát sinh với **một số loại phương thức thanh toán**; đổi sang thẻ
+khác có thể không bị đòi, nhưng không có gì bảo đảm.
+
+Dù hoàn lại được, đây vẫn là tiền ra khỏi túi ngay bây giờ.
+
+### Bảng so sánh
+
+| | **Render** | **Google Cloud Run** |
 | --- | --- | --- |
-| Giá | Miễn phí trong hạn mức, dư sức cho 4 cơ sở | Miễn phí 750 giờ/tháng |
-| Có ngủ không | Không ngủ theo kiểu khó chịu, khởi động lại nhanh | Ngủ sau 15 phút, lần mở đầu chờ khoảng 1 phút |
-| Bộ nhớ | Chọn được 1 GB | Cố định 512 MB, LibreOffice có thể thiếu chỗ |
-| Cài đặt | Rắc rối hơn | Dễ hơn, bấm nút trên web |
-| Thẻ ngân hàng | Phải khai | Phải khai |
+| Phải nộp trước | **Không** | Có thể bị đòi đặt cọc 800.000đ (hoàn lại được) |
+| Giá dùng | Miễn phí 750 giờ/tháng | Miễn phí trong hạn mức, dư sức cho 4 cơ sở |
+| Bộ nhớ | 512 MB | Chọn được 1 GB trở lên |
+| **Có đủ bộ nhớ không** | **Đủ.** Đã đo: đỉnh 305 MB, còn dư hơn 200 MB | Thoải mái |
+| Có ngủ không | Ngủ sau 15 phút, lần mở đầu chờ khoảng 1 phút | Khởi động lại nhanh hơn |
+| Tên miền riêng | Được, miễn phí | Được, miễn phí |
+| Tốc độ tạo PDF | Khoảng 15 giây | Khoảng 15 giây |
 
-**Khuyến nghị: Google Cloud Run**, vì LibreOffice cần nhiều bộ nhớ hơn mức
-512 MB mà Render cho. Nếu bạn muốn thử cách dễ trước thì dùng Render, gặp
-lỗi hết bộ nhớ thì chuyển sang Cloud Run.
+### Số đo thực tế
 
----
+Đo trên máy phát triển, dựng một bộ hợp đồng đầy đủ gồm hợp đồng, phụ lục
+lương và thỏa thuận trách nhiệm:
 
-## Phần 3A. Đặt trên Google Cloud Run (khuyến nghị)
+| Trạng thái | Bộ nhớ |
+| --- | ---: |
+| Lúc nghỉ, không ai dùng | 66 MB |
+| Đang dựng một bộ PDF | 305 MB |
+| **Ba người bấm cùng lúc** | **vẫn 305 MB** |
+
+Con số không tăng khi nhiều người bấm cùng lúc vì ứng dụng **xếp hàng**: mỗi
+lúc chỉ dựng một bộ, người sau chờ người trước. Chờ lâu quá thì báo *Máy chủ
+đang bận* chứ không treo và không bao giờ tràn bộ nhớ.
+
+Máy chủ nhiều bộ nhớ hơn có thể cho chạy song song bằng biến
+`ECONTRACT_MAX_PDF_SONG_SONG`. Cần khoảng 300 MB cho mỗi luồng, cộng thêm
+100 MB cho phần còn lại. Với 1 GB thì đặt `2` là hợp lý.
+
+### Nên chọn cái nào
+
+**Không muốn tốn đồng nào → chọn Render.** Số đo ở trên cho thấy 512 MB là
+đủ. Đổi lại, buổi sáng người đầu tiên mở web phải chờ khoảng một phút vì
+máy chủ vừa thức dậy.
+
+**Chấp nhận đặt cọc, hoặc thẻ của bạn không bị đòi → chọn Cloud Run.** Chạy
+mượt hơn, không phải chờ lúc mở đầu, và còn dư bộ nhớ để về sau thêm chức
+năng.
+
+Cả hai đều dùng chung một bản đóng gói, nên **đổi qua lại lúc nào cũng
+được** mà không phải sửa gì.
+
+## Phần 3A. Đặt trên Google Cloud Run
 
 Có hai cách. **Cách 1 nhanh hơn nhiều** và không phải cài gì lên máy Windows.
 
@@ -188,23 +231,55 @@ gcloud secrets versions add econtract-users --data-file=backend/users.json
 gcloud run services update hop-dong --region us-central1
 ```
 
-## Phần 3B. Đặt trên Render (phương án dự phòng)
+## Phần 3B. Đặt trên Render (không phải nộp trước)
 
-1. Vào <https://render.com>, đăng ký bằng tài khoản GitHub
-2. Bấm **New** → **Web Service** → chọn repository `E-Contract-PDF-HTVEDU`
-3. Phần **Language** chọn **Docker**
-4. **Instance Type** chọn **Free**
-5. Mục **Environment**, thêm hai biến `ECONTRACT_SECRET_KEY` và
-   `ECONTRACT_USERS` giống bảng ở Phần 3A Bước 3
-6. Bấm **Create Web Service**, chờ build xong
-7. Gắn tên miền ở mục **Settings → Custom Domains**, rồi thêm bản ghi DNS
-   theo hướng dẫn hiện trên màn hình
+**Bước 1.** Vào <https://render.com>, bấm **Get Started**, đăng ký bằng tài
+khoản GitHub của bạn.
 
-**Lưu ý về Render:** gói miễn phí ngủ sau 15 phút không ai dùng. Sáng mở lần
-đầu sẽ phải chờ khoảng một phút. Nếu tạo PDF hay bị lỗi, gần như chắc chắn
-là do 512 MB bộ nhớ không đủ cho LibreOffice — khi đó chuyển sang Cloud Run.
+**Bước 2.** Bấm **New** → **Web Service**.
 
----
+**Bước 3.** Chọn repository `E-Contract-PDF-HTVEDU`. Nếu chưa thấy, bấm
+**Configure account** để cho Render quyền đọc repository đó.
+
+**Bước 4.** Điền các mục:
+
+| Mục | Chọn |
+| --- | --- |
+| Name | `hop-dong` hoặc tên bạn thích |
+| Branch | `claude/dazzling-fermat-qkjoee` |
+| Language | **Docker** |
+| Instance Type | **Free** |
+
+**Bước 5.** Mở mục **Environment Variables**, thêm hai biến. Lấy giá trị từ
+Phần 1 ở trên:
+
+| Tên biến | Giá trị |
+| --- | --- |
+| `ECONTRACT_SECRET_KEY` | Chuỗi bí mật bạn đã tạo |
+| `ECONTRACT_USERS` | Dán **toàn bộ nội dung** file `backend/users.json` |
+
+**Bước 6.** Bấm **Create Web Service** và chờ. Lần đầu build mất khoảng
+10–15 phút vì phải tải LibreOffice.
+
+**Bước 7.** Xong, Render đưa cho bạn địa chỉ dạng
+`https://hop-dong.onrender.com`. Mở thử, phải thấy màn hình đăng nhập.
+
+### Gắn tên miền trên Render
+
+Vào **Settings → Custom Domains → Add Custom Domain**, nhập tên miền của
+bạn. Render hiện ra bản ghi DNS cần thêm; vào trang quản lý DNS của nhà cung
+cấp tên miền và thêm đúng bản ghi đó. Render tự cấp chứng chỉ HTTPS miễn phí.
+
+### Những điều cần biết về gói miễn phí của Render
+
+- **Ngủ sau 15 phút** không ai dùng. Người mở web lần đầu trong ngày phải
+  chờ khoảng một phút. Những người sau thì nhanh bình thường
+- **750 giờ mỗi tháng**. Vượt hạn mức thì Render **tạm khóa dịch vụ chứ
+  không tính tiền**, nên không có rủi ro bị trừ tiền bất ngờ
+- Muốn cập nhật phiên bản mới: Render tự build lại mỗi khi bạn đẩy code lên
+  nhánh đã chọn
+- Thêm tài khoản về sau: sửa lại biến `ECONTRACT_USERS` trong mục
+  **Environment**, rồi bấm **Manual Deploy → Deploy latest commit**
 
 ## Phần 4. Kiểm tra sau khi lên mạng
 
@@ -231,6 +306,7 @@ Nếu bước 5 ra file hỏng hoặc chữ bị vuông, xem mục Sự cố bê
 | `ECONTRACT_USERS_FILE` | Không | Dùng thay cho biến trên nếu bạn gắn file vào máy chủ |
 | `ECONTRACT_INSECURE_COOKIES` | Không | Đặt `1` để cookie đi qua HTTP. **Chỉ dùng khi chạy thử trên máy cá nhân.** Không bao giờ đặt trên mạng |
 | `ECONTRACT_DEMO_FONT` | Không | Đường dẫn tới font .ttf cho dòng đánh dấu bản thử nghiệm |
+| `ECONTRACT_MAX_PDF_SONG_SONG` | Không | Số lượt dựng PDF chạy cùng lúc. Mặc định `1`, an toàn cho máy 512 MB. Mỗi luồng cần khoảng 300 MB |
 | `PORT` | Không | Nhà cung cấp tự đặt. Mặc định 8000 |
 
 ---
@@ -243,7 +319,16 @@ không gặp lỗi này. Nếu bạn tự cài lên máy chủ riêng, nhớ cà
 `libreoffice-writer`, không phải chỉ `libreoffice-core`.
 
 **PDF tạo ra bị hỏng hoặc quá trình bị dừng giữa chừng**
-Gần như chắc chắn là thiếu bộ nhớ. Nâng lên 1 GB.
+Thiếu bộ nhớ. Kiểm tra biến `ECONTRACT_MAX_PDF_SONG_SONG` có bị đặt lớn hơn
+1 không; mỗi luồng cần khoảng 300 MB. Nếu vẫn lỗi thì nâng bộ nhớ lên 1 GB.
+
+**Báo "Máy chủ đang bận dựng hồ sơ khác"**
+Đang có người khác tạo PDF. Chờ một lát rồi bấm lại. Đây là cơ chế cố ý để
+máy chủ không bị tràn bộ nhớ, không phải lỗi.
+
+**Mở web buổi sáng phải chờ rất lâu**
+Đúng như thiết kế của gói miễn phí Render: máy chủ ngủ sau 15 phút. Chờ
+khoảng một phút. Muốn hết hẳn thì chuyển sang Cloud Run.
 
 **Chữ tiếng Việt bị ô vuông**
 Thiếu font. Kiểm tra `fonts-dejavu-core` và `fonts-liberation` đã được cài.

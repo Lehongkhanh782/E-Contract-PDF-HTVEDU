@@ -9,6 +9,7 @@ import hashlib
 import os
 import shutil
 import tempfile
+import threading
 from pathlib import Path
 
 from app.config import KIT_DIR, TEMPLATE_DIR, salary_policy
@@ -30,6 +31,28 @@ FONT_CANDIDATES = (
     "C:/Windows/Fonts/arial.ttf",
 )
 MAX_PAGE_PASSES = 3
+
+# Mỗi lần dựng PDF, LibreOffice chiếm khoảng 240 MB trên máy đã đo, tổng
+# tiến trình lên đỉnh khoảng 300 MB. Chạy hai lần cùng lúc trên máy chủ
+# 512 MB sẽ hết bộ nhớ và bị buộc dừng. Vì vậy xếp hàng thay vì chạy song
+# song: chậm hơn một chút nhưng không bao giờ đổ.
+#
+# Máy chủ nhiều bộ nhớ hơn có thể nâng lên bằng ECONTRACT_MAX_PDF_SONG_SONG.
+# Cần khoảng 300 MB cho mỗi luồng, cộng thêm 100 MB cho phần còn lại.
+def _max_song_song() -> int:
+    raw = os.environ.get("ECONTRACT_MAX_PDF_SONG_SONG", "1").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return 1
+    return max(1, value)
+
+
+_cong_pdf = threading.BoundedSemaphore(_max_song_song())
+
+# Chờ tối đa bấy nhiêu giây đến lượt mình. Quá thì báo bận thay vì để người
+# dùng ngồi nhìn màn hình quay mãi.
+THOI_GIAN_CHO_LUOT = 90
 
 
 def _soffice() -> str:
@@ -69,7 +92,21 @@ def calculate(unit_id: str, payload: dict) -> dict:
 
 
 def build_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
-    """Tạo một PDF gồm hợp đồng, phụ lục lương và thỏa thuận trách nhiệm."""
+    """Tạo một PDF gồm hợp đồng, phụ lục lương và thỏa thuận trách nhiệm.
+
+    Chỉ một lượt dựng chạy tại một thời điểm, trừ khi cấu hình khác đi.
+    """
+    if not _cong_pdf.acquire(timeout=THOI_GIAN_CHO_LUOT):
+        raise RuntimeError(
+            "Máy chủ đang bận dựng hồ sơ khác. Chờ một lát rồi bấm lại."
+        )
+    try:
+        return _build_pdf(unit_id, payload, destination)
+    finally:
+        _cong_pdf.release()
+
+
+def _build_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
     from pypdf import PdfReader
 
     soffice = _soffice()
