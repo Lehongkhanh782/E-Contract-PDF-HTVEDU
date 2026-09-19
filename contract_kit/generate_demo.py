@@ -103,6 +103,68 @@ def money(value: Decimal) -> str:
     return f"{int(value):,}".replace(",", ".")
 
 
+CHU_SO = ["không", "một", "hai", "ba", "bốn",
+          "năm", "sáu", "bảy", "tám", "chín"]
+TEN_NHOM = ["", " nghìn", " triệu", " tỷ"]
+
+
+def _doc_ba_chu_so(so: int, day_du: bool) -> str:
+    """Đọc một nhóm ba chữ số. day_du là True khi nhóm phải đọc cả số 0 đầu."""
+    tram, du = divmod(so, 100)
+    chuc, donvi = divmod(du, 10)
+    phan = []
+    if tram > 0 or day_du:
+        phan.append(f"{CHU_SO[tram]} trăm")
+    if chuc == 0:
+        if donvi > 0:
+            if tram > 0 or day_du:
+                phan.append("linh")
+            phan.append(CHU_SO[donvi])
+    elif chuc == 1:
+        phan.append("mười")
+        if donvi == 5:
+            phan.append("lăm")
+        elif donvi > 0:
+            phan.append(CHU_SO[donvi])
+    else:
+        phan.append(f"{CHU_SO[chuc]} mươi")
+        if donvi == 1:
+            phan.append("mốt")
+        elif donvi == 4:
+            phan.append("tư")
+        elif donvi == 5:
+            phan.append("lăm")
+        elif donvi > 0:
+            phan.append(CHU_SO[donvi])
+    return " ".join(phan)
+
+
+def doc_so_tien(value) -> str:
+    """Đổi số tiền sang chữ tiếng Việt, ví dụ 20000000 -> hai mươi triệu đồng.
+
+    Dùng cho các điều khoản bắt buộc ghi cả số lẫn chữ.
+    """
+    so = int(Decimal(str(value)))
+    if so < 0:
+        raise ValueError("Số tiền không được âm")
+    if so == 0:
+        return "không đồng"
+    nhom = []
+    con_lai = so
+    while con_lai > 0:
+        con_lai, du = divmod(con_lai, 1000)
+        nhom.append(du)
+    if len(nhom) > len(TEN_NHOM):
+        raise ValueError("Số tiền vượt phạm vi đã kiểm thử")
+    cao_nhat = len(nhom) - 1
+    phan = []
+    for i in range(cao_nhat, -1, -1):
+        if nhom[i] == 0:
+            continue
+        phan.append(_doc_ba_chu_so(nhom[i], i != cao_nhat) + TEN_NHOM[i])
+    return " ".join(phan) + " đồng"
+
+
 def selected_position(data: dict) -> dict:
     position_id = data.get("job", {}).get("position_id")
     roles = load_json(ROOT / "config/business_rules.json")["positions"]
@@ -184,6 +246,12 @@ def build_context(unit_id: str, data: dict, policy: dict, agreement_pages=3):
         raise ValueError("Ngày kết thúc trước ngày bắt đầu")
     result = calculate_example(data, policy)
     position = selected_position(data)
+    muc_boi_thuong = unit.get("liability_amount")
+    if not muc_boi_thuong or not str(muc_boi_thuong).isdigit():
+        raise ValueError(
+            f"Đơn vị {unit_id} chưa cấu hình liability_amount; "
+            "không tự đoán mức bồi thường"
+        )
     context = {
         "employer": unit,
         "employee": copy.deepcopy(data["employee"]),
@@ -207,6 +275,10 @@ def build_context(unit_id: str, data: dict, policy: dict, agreement_pages=3):
             "commitment_to": date_short(data["responsibility"]["commitment_to"]),
             "liability_from": date_short(data["responsibility"]["liability_from"]),
             "liability_to": date_short(data["responsibility"]["liability_to"]),
+            # Mức bồi thường khác nhau theo đơn vị, lấy từ cấu hình chứ không
+            # ghi cứng trong mẫu Word.
+            "liability_amount": money(Decimal(muc_boi_thuong)),
+            "liability_amount_words": doc_so_tien(muc_boi_thuong),
             "page_count_label": page_count_label(agreement_pages),
         },
         "display": {key: money(Decimal(value)) for key, value in result.items()},
@@ -232,34 +304,107 @@ def convert_to_pdf(docx: Path, destination: Path, soffice: str) -> Path:
     return pdf
 
 
+# Dòng chữ nhận ra trang đầu của phụ lục lương. Hợp đồng và phụ lục nằm
+# chung một file Word nên phải tách theo nội dung để chèn được trang trắng.
+DAU_HIEU_PHU_LUC = "PHỤ LỤC HỢP ĐỒNG"
+
+
+def tach_hop_dong_va_phu_luc(path: Path) -> tuple[list[int], list[int]]:
+    """Tìm ranh giới giữa hợp đồng và phụ lục trong cùng một PDF."""
+    from pypdf import PdfReader
+
+    reader = PdfReader(path)
+    vi_tri = [i for i, page in enumerate(reader.pages)
+              if DAU_HIEU_PHU_LUC in (page.extract_text() or "")]
+    if len(vi_tri) != 1:
+        raise ValueError(
+            f"Cần đúng một trang mở đầu phụ lục có chữ {DAU_HIEU_PHU_LUC!r}; "
+            f"tìm thấy {len(vi_tri)}. Kiểm tra lại mẫu Word."
+        )
+    bat_dau = vi_tri[0]
+    if bat_dau == 0:
+        raise ValueError("Phụ lục nằm ngay trang đầu; mẫu hợp đồng có vấn đề")
+    return list(range(bat_dau)), list(range(bat_dau, len(reader.pages)))
+
+
+def _dong_danh_dau(overlay, width, height):
+    overlay.setFillColorRGB(0.68, 0.05, 0.06)
+    overlay.setFont("DemoNotice", 8)
+    overlay.drawCentredString(width / 2, height - 16,
+                             "BẢN THỬ NGHIỆM - DỮ LIỆU GIẢ - CHƯA DÙNG KÝ")
+
+
+def _trang_de_trong(width: float, height: float):
+    """Trang chèn thêm để phần sau bắt đầu ở mặt trước của một tờ mới.
+
+    Có ghi chú mờ ở giữa để người nhận biết là cố ý bỏ trống, không phải
+    máy in bị lỗi.
+    """
+    from pypdf import PdfReader
+    from reportlab.pdfgen import canvas
+
+    stream = io.BytesIO()
+    trang = canvas.Canvas(stream, pagesize=(width, height))
+    _dong_danh_dau(trang, width, height)
+    trang.setFillColorRGB(0.6, 0.6, 0.6)
+    trang.setFont("DemoNotice", 9)
+    trang.drawCentredString(width / 2, height / 2, "(Trang này để trống)")
+    trang.save()
+    return PdfReader(io.BytesIO(stream.getvalue())).pages[0]
+
+
 def merge_demo_pdf(paths: list[Path], output: Path, font_path: Path):
+    """Ghép thành một PDF, chèn trang trắng để in hai mặt tách tờ được.
+
+    Hợp đồng, phụ lục lương và thỏa thuận được bấm thành ba tập riêng, nên
+    mỗi phần phải bắt đầu ở mặt trước của một tờ mới. Khi in hai mặt, mặt
+    trước luôn là trang lẻ, vì vậy phần nào kết thúc ở trang lẻ sẽ được
+    chèn thêm một trang trắng.
+    """
     from pypdf import PdfReader, PdfWriter
     from reportlab.pdfgen import canvas
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
     pdfmetrics.registerFont(TTFont("DemoNotice", str(font_path)))
+    contract_pdf, agreement_pdf = paths
+    trang_hop_dong, trang_phu_luc = tach_hop_dong_va_phu_luc(contract_pdf)
+    agreement_reader = PdfReader(agreement_pdf)
+
+    phan = [
+        ("Hợp đồng lao động", contract_pdf, trang_hop_dong),
+        ("Phụ lục lương", contract_pdf, trang_phu_luc),
+        ("Thỏa thuận trách nhiệm", agreement_pdf,
+         list(range(len(agreement_reader.pages)))),
+    ]
+
     writer = PdfWriter()
-    section_starts = []
-    for path in paths:
-        reader = PdfReader(path)
-        section_starts.append(len(writer.pages))
-        for page in reader.pages:
+    moc = []
+    for thu_tu, (ten, nguon, chi_so) in enumerate(phan):
+        reader = PdfReader(nguon)
+        moc.append((ten, len(writer.pages)))
+        width = height = None
+        for i in chi_so:
+            page = reader.pages[i]
             content = (page.extract_text() or "").strip()
             if not content or content.isdigit():
-                raise ValueError("Phát hiện trang chỉ trống hoặc chỉ có số trang; kiểm tra mẫu")
+                raise ValueError(
+                    "Phát hiện trang chỉ trống hoặc chỉ có số trang; kiểm tra mẫu"
+                )
             width, height = float(page.mediabox.width), float(page.mediabox.height)
             stream = io.BytesIO()
             overlay = canvas.Canvas(stream, pagesize=(width, height))
-            overlay.setFillColorRGB(0.68, 0.05, 0.06)
-            overlay.setFont("DemoNotice", 8)
-            overlay.drawCentredString(width / 2, height - 16,
-                                     "BẢN THỬ NGHIỆM - DỮ LIỆU GIẢ - CHƯA DÙNG KÝ")
+            _dong_danh_dau(overlay, width, height)
             overlay.save()
             page.merge_page(PdfReader(io.BytesIO(stream.getvalue())).pages[0])
             writer.add_page(page)
-    writer.add_outline_item("Hợp đồng và phụ lục lương", section_starts[0])
-    writer.add_outline_item("Thỏa thuận trách nhiệm", section_starts[1])
+        # Phần cuối không cần đệm: máy in tự để trống mặt sau tờ cuối.
+        con_phan_sau = thu_tu < len(phan) - 1
+        if con_phan_sau and len(writer.pages) % 2 == 1:
+            writer.add_page(_trang_de_trong(width, height))
+
+    for ten, vi_tri in moc:
+        writer.add_outline_item(ten, vi_tri)
     writer.add_metadata({"/Title": "Bộ hợp đồng thử nghiệm",
                          "/Subject": "Dữ liệu giả; chưa dùng ký",
                          "/Author": ""})

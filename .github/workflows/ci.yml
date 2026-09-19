@@ -22,7 +22,7 @@ jobs:
 
       - name: Kiểm thử phần lõi
         working-directory: contract_kit
-        run: python -m unittest test_core.py
+        run: python -m unittest test_core.py test_in_hai_mat.py
 
       - name: Kiểm thử API và đăng nhập
         run: python -m unittest discover -s backend/tests -t backend
@@ -70,7 +70,7 @@ jobs:
       - name: Cài thư viện
         run: pip install -r contract_kit/requirements.txt
 
-      - name: Tạo PDF cho cả 4 đơn vị
+      - name: Tạo PDF và kiểm tra bố cục cho cả 4 đơn vị
         working-directory: contract_kit
         run: |
           set -e
@@ -81,6 +81,9 @@ jobs:
             kich_thuoc=$(stat -c%s "out/$don_vi.pdf")
             echo "$don_vi: $kich_thuoc bytes"
             test "$kich_thuoc" -gt 50000
+            # Mỗi phần phải bắt đầu ở trang lẻ để in hai mặt tách tờ được,
+            # và mức bồi thường phải đúng theo từng đơn vị.
+            python kiem_tra_bo_cuc.py "out/$don_vi.pdf" --unit "$don_vi"
           done
 
       - name: Giữ lại PDF để tải về xem

@@ -660,6 +660,30 @@
       ]
     },
     {
+      "field": "responsibility.liability_amount",
+      "source": "unit_config_user_confirmation_2026-09-19",
+      "locations": [
+        {
+          "field": "responsibility.liability_amount",
+          "template": "Thoa_thuan_trach_nhiem_template.docx",
+          "source_body_paragraph_index": 27,
+          "source_location_index_base": 0
+        }
+      ]
+    },
+    {
+      "field": "responsibility.liability_amount_words",
+      "source": "unit_config_user_confirmation_2026-09-19",
+      "locations": [
+        {
+          "field": "responsibility.liability_amount_words",
+          "template": "Thoa_thuan_trach_nhiem_template.docx",
+          "source_body_paragraph_index": 27,
+          "source_location_index_base": 0
+        }
+      ]
+    },
+    {
       "field": "responsibility.liability_from",
       "source": "separate_agreement_inputs_or_render_page_count",
       "locations": [

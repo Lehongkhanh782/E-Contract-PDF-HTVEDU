@@ -32,7 +32,7 @@
     "mode_required": true,
     "mode_default": null,
     "base_wage_source": "job.position_id -> positions.base_wage",
-    "residual_income_allocation_status": "pending_user_confirmation",
+    "residual_income_allocation_status": "confirmed_single_position_allowance_line_2026-09-19",
     "deduction_policy_status": "example_only_pending_confirmation"
   },
   "positions": [
@@ -70,5 +70,11 @@
   "positions_status": "base_wages_confirmed_by_user",
   "base_wage_policy_effective_from": null,
   "historical_policy_dates": "not_supplied",
-  "document_applicability": "Source teacher clauses still require per-role review"
+  "document_applicability": "Source teacher clauses still require per-role review",
+  "liability_policy": {
+    "amount_source": "units.json -> liability_amount",
+    "status": "confirmed_per_unit_2026-09-19",
+    "note": "Mức bồi thường khác nhau theo đơn vị. Phạm vi chức danh áp dụng chưa được xác nhận; hiện áp dụng cho mọi vị trí.",
+    "position_scope_status": "pending_user_confirmation"
+  }
 }

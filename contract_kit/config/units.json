@@ -26,7 +26,9 @@
       "header_status": "parent_company_header_adapted_from_source_pending_review",
       "workplace_address_status": "using_registered_address_for_demo_pending_confirmation",
       "template_applicability": "pending_review",
-      "production_ready": false
+      "production_ready": false,
+      "liability_amount": "20000000",
+      "liability_amount_source": "user_confirmation_2026-09-19"
     },
     {
       "unit_id": "victoria",
@@ -53,7 +55,9 @@
       "header_status": "parent_company_header_adapted_from_source_pending_review",
       "workplace_address_status": "using_registered_address_for_demo_pending_confirmation",
       "template_applicability": "pending_review",
-      "production_ready": false
+      "production_ready": false,
+      "liability_amount": "20000000",
+      "liability_amount_source": "user_confirmation_2026-09-19"
     },
     {
       "unit_id": "gau_panda",
@@ -80,7 +84,9 @@
       "header_status": "parent_company_header_adapted_from_source_pending_review",
       "workplace_address_status": "using_registered_address_for_demo_pending_confirmation",
       "template_applicability": "pending_review",
-      "production_ready": false
+      "production_ready": false,
+      "liability_amount": "10000000",
+      "liability_amount_source": "user_confirmation_2026-09-19"
     },
     {
       "unit_id": "dai_duong_xanh",
@@ -108,7 +114,9 @@
       "workplace_address_status": "using_registered_address_for_demo_pending_confirmation",
       "template_applicability": "pending_review",
       "production_ready": false,
-      "tax_code_status": "reconfirmed_by_user"
+      "tax_code_status": "reconfirmed_by_user",
+      "liability_amount": "20000000",
+      "liability_amount_source": "user_confirmation_2026-09-19"
     }
   ]
 }
