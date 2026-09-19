@@ -26,6 +26,9 @@ tự dựng lên.
 
 ## Phần 1. Chuẩn bị hai chuỗi bí mật
 
+> **Bỏ qua phần này** nếu bạn dùng Cách 1 ở Phần 3A (chạy script trong
+> Cloud Shell) — script tự lo hết. Phần này dành cho Cách 2 và cho Render.
+
 Mở phần mềm dòng lệnh trên máy bạn (Windows: bấm phím Windows, gõ
 `PowerShell`, mở ra), rồi chạy trong thư mục dự án:
 
@@ -78,62 +81,114 @@ lỗi hết bộ nhớ thì chuyển sang Cloud Run.
 
 ---
 
-## Phần 3A. Đặt trên Google Cloud Run
+## Phần 3A. Đặt trên Google Cloud Run (khuyến nghị)
 
-### Bước 1. Tạo tài khoản
+Có hai cách. **Cách 1 nhanh hơn nhiều** và không phải cài gì lên máy Windows.
 
-1. Vào <https://console.cloud.google.com>, đăng nhập bằng Gmail
-2. Khai thẻ ngân hàng để xác minh. Google không trừ tiền khi còn trong hạn
-   mức miễn phí, nhưng hãy tự đặt cảnh báo ngân sách ở mục **Billing →
-   Budgets & alerts** cho yên tâm
-3. Tạo một dự án mới, đặt tên ví dụ `hop-dong-htvedu`
+### Cách 1: chạy một câu lệnh trong Cloud Shell
 
-### Bước 2. Nối với GitHub
+Cloud Shell là cửa sổ dòng lệnh nằm ngay trong trình duyệt, Google cho dùng
+miễn phí và đã cài sẵn mọi công cụ.
 
-1. Vào mục **Cloud Run** → bấm **Deploy container** → **Service**
+**Bước 1.** Vào <https://console.cloud.google.com>, đăng nhập bằng Gmail.
+Khai thẻ ngân hàng để xác minh. Google không trừ tiền khi còn trong hạn mức
+miễn phí, nhưng hãy vào **Billing → Budgets & alerts** đặt một cảnh báo
+ngân sách cho yên tâm.
+
+**Bước 2.** Tạo dự án mới, đặt tên ví dụ `hop-dong-htvedu`, rồi chọn dự án đó.
+
+**Bước 3.** Bấm biểu tượng `>_` ở góc trên bên phải để mở Cloud Shell.
+
+**Bước 4.** Dán nguyên khối lệnh sau rồi bấm Enter:
+
+```bash
+git clone https://github.com/Lehongkhanh782/E-Contract-PDF-HTVEDU.git
+cd E-Contract-PDF-HTVEDU
+git checkout claude/dazzling-fermat-qkjoee
+bash deploy/cloudrun.sh
+```
+
+Script sẽ hỏi bạn tên tài khoản và mật khẩu đăng nhập đầu tiên, rồi tự làm
+hết phần còn lại: bật dịch vụ, tạo khóa bí mật, build và dựng lên. Lần đầu
+mất khoảng 5–10 phút.
+
+Xong, nó in ra địa chỉ web dạng `https://hop-dong-xxxxx.a.run.app`.
+
+Muốn đổi vùng hoặc bộ nhớ thì đặt biến trước khi chạy:
+
+```bash
+VUNG=us-east1 BO_NHO=2Gi bash deploy/cloudrun.sh
+```
+
+Về sau, mỗi khi có phiên bản mới, chỉ cần chạy lại:
+
+```bash
+cd ~/E-Contract-PDF-HTVEDU && git pull && bash deploy/cloudrun.sh
+```
+
+Tài khoản và khóa bí mật đã tạo vẫn được giữ nguyên.
+
+### Cách 2: bấm nút trên giao diện web
+
+Nếu bạn muốn tự bấm từng bước thay vì chạy script:
+
+1. Vào **Cloud Run** → **Deploy container** → **Service**
 2. Chọn **Continuously deploy from a repository** → **Set up with Cloud Build**
-3. Chọn repository `E-Contract-PDF-HTVEDU`, nhánh muốn chạy
-4. Phần **Build Type**, chọn **Dockerfile**, đường dẫn để `/Dockerfile`
-
-### Bước 3. Cấu hình
-
-Vẫn ở màn hình đó:
-
-- **Region**: chọn `us-central1`, `us-east1` hoặc `us-west1`. Hạn mức miễn
-  phí chỉ áp dụng cho ba vùng này
-- **Authentication**: chọn **Allow unauthenticated invocations**. Nghe đáng
-  sợ nhưng đúng — đây là để web mở được, còn việc chặn người lạ do màn hình
-  đăng nhập của ứng dụng lo
-- Mở **Container(s), Volumes, Networking, Security**:
-  - **Memory**: đổi thành **1 GiB**. Để 512 MB thì LibreOffice dễ bị thiếu
-    bộ nhớ và tạo PDF hỏng
-  - **Request timeout**: đặt **120** giây, vì tạo PDF mất 10–30 giây
-  - **Variables & Secrets** → thêm hai biến:
+3. Chọn repository `E-Contract-PDF-HTVEDU` và nhánh muốn chạy
+4. **Build Type** chọn **Dockerfile**, đường dẫn `/Dockerfile`
+5. **Region**: chọn `us-central1`, `us-east1` hoặc `us-west1`. Hạn mức miễn
+   phí chỉ áp dụng cho ba vùng này
+6. **Authentication**: chọn **Allow unauthenticated invocations**. Nghe đáng
+   sợ nhưng đúng — đây là để web mở được, còn việc chặn người lạ do màn hình
+   đăng nhập của ứng dụng lo
+7. Mở **Container(s), Volumes, Networking, Security**:
+   - **Memory**: đổi thành **1 GiB**. Để 512 MB thì LibreOffice dễ thiếu bộ
+     nhớ và tạo ra PDF hỏng
+   - **Request timeout**: đặt **120** giây, vì tạo PDF mất 10–30 giây
+   - **Maximum instances**: đặt **3** để chặn chi phí nếu bị gọi dồn dập
+   - **Variables & Secrets** → thêm hai biến:
 
 | Tên biến | Giá trị |
 | --- | --- |
-| `ECONTRACT_SECRET_KEY` | Chuỗi bí mật bạn tạo ở Phần 1 |
+| `ECONTRACT_SECRET_KEY` | Chuỗi bí mật tạo ở Phần 1 |
 | `ECONTRACT_USERS` | Dán **toàn bộ nội dung** file `backend/users.json` |
 
-> Nên dùng **Secret Manager** thay cho biến thường cho cả hai giá trị này.
-> Trong màn hình đó có nút **Reference a Secret**.
+> Nên dùng nút **Reference a Secret** để cất hai giá trị này vào Secret
+> Manager, thay vì để làm biến thường.
 
-### Bước 4. Bấm Create và chờ
+8. Bấm **Create** và chờ
 
-Lần đầu mất khoảng 5–10 phút. Xong, Google đưa cho bạn một địa chỉ dạng
-`https://ten-dich-vu-xxxxx.a.run.app`. Mở thử, phải thấy màn hình đăng nhập.
+### Gắn tên miền của bạn
 
-### Bước 5. Gắn tên miền của bạn
+Sau khi web chạy được:
 
-1. Trong Cloud Run, vào **Manage custom domains** → **Add mapping**
-2. Chọn dịch vụ vừa tạo, nhập tên miền, ví dụ `hopdong.tenmiencuaban.vn`
-3. Google sẽ bắt xác minh quyền sở hữu tên miền, rồi đưa cho bạn vài bản ghi DNS
-4. Vào trang quản lý DNS của nhà cung cấp tên miền, thêm đúng các bản ghi đó
-5. Chờ 15 phút đến vài giờ. Google tự cấp chứng chỉ HTTPS miễn phí
+```bash
+gcloud beta run domain-mappings create \
+  --service hop-dong --region us-central1 \
+  --domain hopdong.tenmiencuaban.vn
+```
 
----
+Hoặc làm trên web: **Cloud Run → Manage custom domains → Add mapping**.
 
-## Phần 3B. Đặt trên Render
+Google sẽ bắt xác minh quyền sở hữu tên miền, rồi đưa cho bạn vài bản ghi
+DNS. Vào trang quản lý DNS của nhà cung cấp tên miền, thêm đúng các bản ghi
+đó. Chờ từ 15 phút đến vài giờ. Google tự cấp chứng chỉ HTTPS miễn phí.
+
+### Thêm tài khoản về sau
+
+Tạo tài khoản mới trên máy bạn, rồi đẩy cả danh sách lên Secret Manager:
+
+```bash
+# Trên máy bạn
+cd backend
+../.venv/bin/python -m app.usertool them quanly-vic --don-vi victoria
+
+# Rồi trong Cloud Shell, hoặc trên máy đã cài gcloud
+gcloud secrets versions add econtract-users --data-file=backend/users.json
+gcloud run services update hop-dong --region us-central1
+```
+
+## Phần 3B. Đặt trên Render (phương án dự phòng)
 
 1. Vào <https://render.com>, đăng ký bằng tài khoản GitHub
 2. Bấm **New** → **Web Service** → chọn repository `E-Contract-PDF-HTVEDU`
