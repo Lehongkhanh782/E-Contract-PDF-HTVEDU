@@ -21,7 +21,7 @@ from pathlib import Path
 # Ảnh căn cước chụp bằng điện thoại thường dưới 5 MB.
 GIOI_HAN_BYTE = 8 * 1024 * 1024
 KICH_THUOC_TOI_DA = (6000, 6000)
-THOI_GIAN_TOI_DA = 30
+THOI_GIAN_TOI_DA = 45
 
 # Tesseract chỉ chiếm khoảng 39 MB nhưng vẫn giới hạn số lượt chạy cùng lúc
 # để không cộng dồn với phần dựng PDF trên máy chủ 512 MB.
@@ -33,8 +33,10 @@ DINH_DANG_CHO_PHEP = {"JPEG", "PNG", "WEBP"}
 SO_TRANG_TOI_DA = 3
 # Mặt trước, mặt sau và một bản dự phòng là đủ cho mọi trường hợp thực tế.
 SO_TEP_TOI_DA = 3
-# 300 điểm/inch là mức Tesseract đọc tốt mà chưa tốn nhiều bộ nhớ.
-DO_PHAN_GIAI = 300
+# 200 điểm/inch đủ để đọc thẻ trên trang A4 mà dựng ảnh nhanh gấp đôi so
+# với 300. Ở 300, riêng bước dựng ảnh một PDF hai trang đã mất gần 16 giây
+# và làm cả yêu cầu vượt quá thời gian cho phép.
+DO_PHAN_GIAI = 200
 # Bản scan đã được máy quét nhận chữ sẵn thì dùng luôn, khỏi đọc lại ảnh.
 DU_CHU_DE_DUNG_LUON = 60
 
@@ -72,6 +74,27 @@ def _poppler(ten: str) -> str:
             f"Máy chủ chưa cài {ten}. Cài gói poppler-utils để đọc được PDF."
         )
     return duong_dan
+
+
+def _chay(lenh: list[str], giay: int | None = None) -> subprocess.CompletedProcess:
+    """Gọi lệnh ngoài và đổi mọi sự cố thành thông báo hiểu được.
+
+    Thiếu chỗ này thì quá thời gian sẽ ném subprocess.TimeoutExpired, không
+    lớp nào bắt, và người dùng nhận lỗi 500 không biết vì sao.
+    """
+    try:
+        return subprocess.run(
+            lenh, capture_output=True, text=True,
+            timeout=giay or THOI_GIAN_TOI_DA,
+        )
+    except subprocess.TimeoutExpired as loi:
+        raise RuntimeError(
+            "Đọc tệp quá lâu nên đã dừng. Tệp có thể quá lớn hoặc quá nhiều "
+            "chi tiết. Thử chụp thẳng thẻ bằng điện thoại thay vì tải bản "
+            "quét nhiều trang."
+        ) from loi
+    except (OSError, subprocess.SubprocessError) as loi:
+        raise RuntimeError("Máy chủ không chạy được công cụ đọc tệp") from loi
 
 
 def _tesseract() -> str:
@@ -144,10 +167,7 @@ def _kiem_tra_pdf(du_lieu: bytes) -> int:
 
 def _chu_co_san_trong_pdf(duong_dan: Path) -> str:
     """Lấy lớp chữ sẵn có, nếu máy quét đã nhận dạng chữ từ trước."""
-    ket_qua = subprocess.run(
-        [_poppler("pdftotext"), "-layout", str(duong_dan), "-"],
-        capture_output=True, text=True, timeout=THOI_GIAN_TOI_DA,
-    )
+    ket_qua = _chay([_poppler("pdftotext"), "-layout", str(duong_dan), "-"])
     return ket_qua.stdout if ket_qua.returncode == 0 else ""
 
 
@@ -166,10 +186,10 @@ def _doc_pdf(du_lieu: bytes) -> str:
             return san_co
 
         # Không có lớp chữ: dựng từng trang thành ảnh rồi nhận dạng.
-        subprocess.run(
+        _chay(
             [pdftoppm, "-r", str(DO_PHAN_GIAI), "-png",
              "-l", str(SO_TRANG_TOI_DA), str(goc), str(Path(thu_muc) / "trang")],
-            capture_output=True, timeout=THOI_GIAN_TOI_DA * 2, check=True,
+            giay=THOI_GIAN_TOI_DA,
         )
         anh = sorted(Path(thu_muc).glob("trang*.png"))
         if not anh:
@@ -180,7 +200,7 @@ def _doc_pdf(du_lieu: bytes) -> str:
             rieng = Path(thu_muc) / f"trang{i}"
             rieng.mkdir(exist_ok=True)
             try:
-                phan.append(_doc_nhieu_luot(tesseract, tep, rieng))
+                phan.append(_doc_nhieu_luot(tesseract, tep, rieng, CHE_DO_PDF))
             except RuntimeError:
                 continue
         if not phan:
@@ -217,15 +237,17 @@ def doc_van_ban(du_lieu: bytes) -> str:
 # nên bắt được dòng địa chỉ mà hai chế độ kia bỏ sót trên ảnh chụp nghiêng.
 # Gộp kết quả cả ba rồi mới tách trường.
 CHE_DO = (3, 11, 6)
+# Ảnh dựng từ PDF rất lớn nên chỉ chạy hai chế độ, tránh quá thời gian.
+CHE_DO_PDF = (3, 11)
 
 
-def _doc_nhieu_luot(tesseract: str, anh: Path, thu_muc: Path) -> str:
+def _doc_nhieu_luot(tesseract: str, anh: Path, thu_muc: Path,
+                    che_do_list: tuple[int, ...] = CHE_DO) -> str:
     phan = []
-    for che_do in CHE_DO:
+    for che_do in che_do_list:
         ra = thu_muc / f"ra{che_do}"
-        ket_qua = subprocess.run(
-            [tesseract, str(anh), str(ra), "-l", "vie", "--psm", str(che_do)],
-            capture_output=True, text=True, timeout=THOI_GIAN_TOI_DA,
+        ket_qua = _chay(
+            [tesseract, str(anh), str(ra), "-l", "vie", "--psm", str(che_do)]
         )
         tep = ra.with_suffix(".txt")
         if ket_qua.returncode == 0 and tep.is_file():
@@ -605,16 +627,27 @@ def gop_nhieu_tep(danh_sach: list[bytes]) -> dict:
     if not doc_duoc and loi_cuoi is not None:
         raise loi_cuoi
 
+    if doc_duoc:
+        canh_bao = (
+            "Đây chỉ là gợi ý do máy đọc. Máy thường nhầm dấu tiếng Việt, "
+            "nhất là ở họ tên. Đọc lại từng ô trước khi tạo hợp đồng."
+        )
+    else:
+        # Thường gặp với bản photo mờ đem quét lại: chữ xám trên nền xám.
+        canh_bao = (
+            "Máy không đọc được ô nào. Thường là do tệp quá mờ, ví dụ bản "
+            "photo đem quét lại, hoặc thẻ bị nằm ngang trong trang. Hãy chụp "
+            "thẳng thẻ bằng điện thoại dưới ánh sáng đều, để thẻ nằm ngay "
+            "ngắn và chiếm gần hết khung hình. Hoặc nhập tay các ô bên dưới."
+        )
+
     return {
         "fields": gop,
         "recognised": doc_duoc,
         "missing": [ten for ten in TRUONG if ten not in doc_duoc],
         "is_suggestion_only": True,
         "files": tung_tep,
-        "warning": (
-            "Đây chỉ là gợi ý do máy đọc. Máy thường nhầm dấu tiếng Việt, "
-            "nhất là ở họ tên. Đọc lại từng ô trước khi tạo hợp đồng."
-        ),
+        "warning": canh_bao,
         "raw_text": "\n".join(van_ban).strip(),
     }
 

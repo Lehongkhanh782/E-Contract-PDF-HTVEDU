@@ -22,7 +22,7 @@ export const emptyForm: ContractForm = {
     permanent_address: '',
   },
   job: { position_id: '' },
-  signing_date: '',
+  signing_date: goiYNgayKy(),
   contract: {
     type_term_text: 'Hợp đồng lao động xác định thời hạn 10 tháng',
     end_date: '',
@@ -92,6 +92,55 @@ export const demoForm: ContractForm = {
     salary_mode: 'gross',
     salary_amount: '6000000',
   },
+}
+
+/**
+ * Gợi ý ngày ký theo quy tắc đã chốt.
+ *
+ * Trong nửa đầu tháng thì gợi ý ký từ ngày 1 của chính tháng đó; từ ngày
+ * 16 trở đi thì gợi ý ký từ ngày 1 tháng sau. Chỉ là gợi ý, nhân sự sửa
+ * lại được.
+ */
+export function goiYNgayKy(homNay = new Date()): string {
+  const nam = homNay.getFullYear()
+  const thang = homNay.getMonth()
+  const sang_thang_sau = homNay.getDate() > 15
+  const ngay = new Date(nam, sang_thang_sau ? thang + 1 : thang, 1)
+  return [
+    ngay.getFullYear(),
+    String(ngay.getMonth() + 1).padStart(2, '0'),
+    '01',
+  ].join('-')
+}
+
+/**
+ * Số tháng của hợp đồng, tính cả ngày đầu và ngày cuối.
+ *
+ * Từ 01/08/2026 đến 31/05/2027 là 10 tháng: cộng một ngày vào ngày kết
+ * thúc rồi mới đếm, nên mốc cuối tháng ra số tròn.
+ */
+export function soThangHopDong(tuNgay: string, denNgay: string): number | null {
+  if (!tuNgay || !denNgay) return null
+  const dau = new Date(tuNgay)
+  const cuoi = new Date(denNgay)
+  if (Number.isNaN(dau.getTime()) || Number.isNaN(cuoi.getTime())) return null
+  if (cuoi < dau) return null
+
+  const sau = new Date(cuoi)
+  sau.setDate(sau.getDate() + 1)
+  let thang =
+    (sau.getFullYear() - dau.getFullYear()) * 12 +
+    (sau.getMonth() - dau.getMonth())
+  if (sau.getDate() < dau.getDate()) thang -= 1
+  return thang > 0 ? thang : null
+}
+
+/** Câu mô tả loại hợp đồng, điền sẵn theo số tháng tính được. */
+export function moTaThoiHan(tuNgay: string, denNgay: string): string | null {
+  const thang = soThangHopDong(tuNgay, denNgay)
+  return thang === null
+    ? null
+    : `Hợp đồng lao động xác định thời hạn ${thang} tháng`
 }
 
 /** 5.310.000 -> "5.310.000". Chuỗi rỗng hoặc không phải số thì trả nguyên. */

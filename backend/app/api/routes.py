@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import tempfile
 import unicodedata
@@ -16,6 +17,8 @@ from app.auth import User
 from app.deps import current_user, require_unit
 from app.schemas import ContractRequest, SalaryRequest
 from app.services import documents, ocr
+
+logger = logging.getLogger("econtract.ocr")
 
 router = APIRouter(prefix="/api")
 
@@ -146,6 +149,17 @@ async def ocr_giay_to(
         raise HTTPException(status_code=503, detail=str(loi)) from loi
     except RuntimeError as loi:
         raise HTTPException(status_code=503, detail=str(loi)) from loi
+    except Exception as loi:
+        # Không để lọt lỗi lạ thành 500 không lời giải thích. Chi tiết ghi
+        # vào log của máy chủ, người dùng nhận câu tiếng Việt kèm hướng xử lý.
+        logger.exception("Lỗi ngoài dự tính khi đọc giấy tờ")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Máy chủ không xử lý được tệp này. Thử chụp thẳng thẻ bằng "
+                "điện thoại thay vì tải bản quét, hoặc nhập tay các ô bên dưới."
+            ),
+        ) from loi
 
     return JSONResponse(ket_qua)
 

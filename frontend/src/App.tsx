@@ -9,7 +9,14 @@ import {
   logout,
 } from './api'
 import { Field, Section, Select, TextArea } from './components'
-import { demoForm, digitsOnly, emptyForm, formatMoney } from './defaults'
+import {
+  demoForm,
+  digitsOnly,
+  emptyForm,
+  formatMoney,
+  moTaThoiHan,
+  soThangHopDong,
+} from './defaults'
 import Brand, { MO_TA_PHIEN_BAN, PHIEN_BAN } from './Brand'
 import IdCardReader from './IdCardReader'
 import SalaryTable from './SalaryTable'
@@ -140,42 +147,40 @@ function ContractWorkspace({
   }
 
   /**
-   * Ngày ký cũng là ngày hiệu lực hợp đồng theo quy tắc đã chốt. Các mốc của
-   * phụ lục lương và thỏa thuận trách nhiệm chưa được xác nhận là luôn trùng
-   * ngày ký, nên chỉ điền sẵn khi ô còn trống.
+   * Ngày ký là ngày hiệu lực hợp đồng và cũng là ngày phụ lục lương bắt
+   * đầu áp dụng. Ngày kết thúc hợp đồng cũng là ngày phụ lục hết hiệu lực.
+   * Vì vậy hai mốc của phụ lục không còn ô nhập riêng mà luôn đi theo.
    */
-  function chooseSigningDate(value: string) {
+  function dongBoNgay(signing: string, ketThuc: string) {
     setForm((current) => ({
       ...current,
-      signing_date: value,
-      salary_period: {
-        ...current.salary_period,
-        effective_from: current.salary_period.effective_from || value,
+      signing_date: signing,
+      contract: {
+        ...current.contract,
+        end_date: ketThuc,
+        // Số tháng suy ra từ hai mốc ngày; nhân sự vẫn sửa lại câu được.
+        type_term_text:
+          moTaThoiHan(signing, ketThuc) ?? current.contract.type_term_text,
       },
+      salary_period: { effective_from: signing, effective_to: ketThuc },
       responsibility: {
-        commitment_from: current.responsibility.commitment_from || value,
-        commitment_to: current.responsibility.commitment_to,
-        liability_from: current.responsibility.liability_from || value,
-        liability_to: current.responsibility.liability_to,
+        commitment_from: signing || current.responsibility.commitment_from,
+        commitment_to: ketThuc || current.responsibility.commitment_to,
+        liability_from: signing || current.responsibility.liability_from,
+        liability_to: ketThuc || current.responsibility.liability_to,
       },
     }))
   }
 
-  function chooseEndDate(value: string) {
-    setForm((current) => ({
-      ...current,
-      contract: { ...current.contract, end_date: value },
-      salary_period: {
-        ...current.salary_period,
-        effective_to: current.salary_period.effective_to || value,
-      },
-      responsibility: {
-        ...current.responsibility,
-        commitment_to: current.responsibility.commitment_to || value,
-        liability_to: current.responsibility.liability_to || value,
-      },
-    }))
+  function chooseSigningDate(value: string) {
+    dongBoNgay(value, form.contract.end_date)
   }
+
+  function chooseEndDate(value: string) {
+    dongBoNgay(form.signing_date, value)
+  }
+
+  const soThang = soThangHopDong(form.signing_date, form.contract.end_date)
 
   const missing = useMemo(() => {
     const required: [string, string][] = [
@@ -384,7 +389,7 @@ function ContractWorkspace({
 
       <Section
         title="3. Vị trí và thời hạn"
-        hint="Ngày ký cũng là ngày hiệu lực hợp đồng. Lương cơ bản lấy theo vị trí đã cấu hình, không nhập tay."
+        hint="Ngày ký là ngày hiệu lực hợp đồng và cũng là ngày phụ lục lương bắt đầu áp dụng. Số tháng tự tính từ hai mốc ngày."
       >
         <Select
           label="Vị trí"
@@ -405,6 +410,7 @@ function ContractWorkspace({
           label="Ngày ký (= ngày hiệu lực)"
           type="date"
           required
+          hint="Gợi ý sẵn ngày 1 theo quy tắc nửa đầu tháng; sửa lại được."
           value={form.signing_date}
           onChange={chooseSigningDate}
         />
@@ -418,20 +424,13 @@ function ContractWorkspace({
         <Field
           label="Loại và thời hạn hợp đồng"
           wide
+          hint={
+            soThang === null
+              ? 'Tự điền khi chọn đủ ngày ký và ngày kết thúc'
+              : `Tính được ${soThang} tháng từ hai mốc ngày ở trên. Phụ lục lương cũng áp dụng đúng khoảng này.`
+          }
           value={form.contract.type_term_text}
           onChange={(value) => patch('contract', { type_term_text: value })}
-        />
-        <Field
-          label="Phụ lục lương áp dụng từ"
-          type="date"
-          value={form.salary_period.effective_from}
-          onChange={(value) => patch('salary_period', { effective_from: value })}
-        />
-        <Field
-          label="Phụ lục lương áp dụng đến"
-          type="date"
-          value={form.salary_period.effective_to}
-          onChange={(value) => patch('salary_period', { effective_to: value })}
         />
       </Section>
 

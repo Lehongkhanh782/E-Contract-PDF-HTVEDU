@@ -151,9 +151,15 @@ export default function IdCardReader({
 
       {ketQua && (
         <>
-          <p className="alert warn">
-            <b>Máy đọc xong — nhưng phải kiểm tra lại.</b> {ketQua.warning}
+          <p className={ketQua.recognised.length ? 'alert warn' : 'alert error'}>
+            <b>
+              {ketQua.recognised.length
+                ? 'Máy đọc xong — nhưng phải kiểm tra lại.'
+                : 'Không đọc được.'}
+            </b>{' '}
+            {ketQua.warning}
           </p>
+          {ketQua.recognised.length > 0 && (
           <table className="calc ocr-table">
             <tbody>
               {(Object.keys(TEN_TRUONG) as (keyof OcrFields)[]).map((khoa) => (
@@ -168,6 +174,8 @@ export default function IdCardReader({
               ))}
             </tbody>
           </table>
+          )}
+          {ketQua.recognised.length > 0 && (
           <p className="hint">
             Đọc được {ketQua.recognised.length}/6 ô
             {ketQua.files && ketQua.files.length > 1
@@ -176,6 +184,7 @@ export default function IdCardReader({
             . Các ô đọc được đã điền
             sẵn bên dưới, bạn sửa lại cho đúng rồi mới tạo hợp đồng.
           </p>
+          )}
         </>
       )}
     </div>
