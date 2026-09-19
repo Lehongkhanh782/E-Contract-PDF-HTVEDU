@@ -7,11 +7,13 @@ import tempfile
 import unicodedata
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 
 from app import config
+from app.auth import User
+from app.deps import current_user, require_unit
 from app.schemas import ContractRequest
 from app.services import documents
 
@@ -36,8 +38,8 @@ def health() -> dict:
 
 
 @router.get("/units")
-def list_units() -> dict:
-    """4 đơn vị đã cấu hình. Chỉ trả phần cần cho giao diện."""
+def list_units(user: User = Depends(current_user)) -> dict:
+    """Các đơn vị mà tài khoản này được phép dùng."""
     return {
         "units": [
             {
@@ -52,13 +54,14 @@ def list_units() -> dict:
                 "production_ready": unit["production_ready"],
             }
             for unit in config.units()
+            if user.may_use(unit["unit_id"])
         ],
         "notice": DEMO_NOTICE,
     }
 
 
 @router.get("/positions")
-def list_positions() -> dict:
+def list_positions(_: User = Depends(current_user)) -> dict:
     """5 vị trí và mức lương cơ bản đã được xác nhận."""
     rules = config.business_rules()
     return {
@@ -69,7 +72,7 @@ def list_positions() -> dict:
 
 
 @router.get("/defaults")
-def form_defaults() -> dict:
+def form_defaults(_: User = Depends(current_user)) -> dict:
     """Giá trị gợi ý cho các ô dài, lấy từ hồ sơ mẫu để nhân sự đỡ gõ lại.
 
     Đây là gợi ý điền nhanh, không phải điều khoản đã duyệt cho mọi vị trí.
@@ -90,8 +93,10 @@ def form_defaults() -> dict:
 
 
 @router.post("/preview")
-def preview(request: ContractRequest) -> JSONResponse:
+def preview(request: ContractRequest,
+            user: User = Depends(current_user)) -> JSONResponse:
     """Tính tiền và trả kết quả, không tạo file. Dùng cho bảng xem trước."""
+    require_unit(user, request.unit_id)
     try:
         result = documents.calculate(request.unit_id, request.to_kit_payload())
     except ValueError as error:
@@ -108,8 +113,10 @@ def preview(request: ContractRequest) -> JSONResponse:
 
 
 @router.post("/generate")
-def generate(request: ContractRequest) -> FileResponse:
+def generate(request: ContractRequest,
+             user: User = Depends(current_user)) -> FileResponse:
     """Tạo PDF gồm hợp đồng, phụ lục lương và thỏa thuận trách nhiệm."""
+    require_unit(user, request.unit_id)
     folder = Path(tempfile.mkdtemp(prefix="econtract_out_"))
     target = folder / "Bo_hop_dong_thu_nghiem.pdf"
 

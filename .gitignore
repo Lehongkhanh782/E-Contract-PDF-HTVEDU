@@ -24,3 +24,8 @@ Thumbs.db
 # Node
 node_modules/
 frontend/dist/
+
+# Tài khoản và bí mật - TUYỆT ĐỐI KHÔNG đưa lên Git
+users.json
+backend/users.json
+*.secret

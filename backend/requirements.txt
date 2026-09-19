@@ -2,6 +2,7 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 python-multipart==0.0.20
+itsdangerous==2.2.0
 httpx==0.28.1
 
 # Các thư viện của phần lõi contract_kit

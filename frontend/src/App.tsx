@@ -1,13 +1,60 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ApiError, downloadPdf, fetchPositions, fetchUnits, preview } from './api'
+import {
+  ApiError,
+  UnauthorizedError,
+  downloadPdf,
+  fetchMe,
+  fetchPositions,
+  fetchUnits,
+  logout,
+  preview,
+} from './api'
 import { Field, Section, Select, TextArea } from './components'
 import { demoForm, digitsOnly, emptyForm, formatMoney } from './defaults'
-import type { ContractForm, Position, PreviewResponse, Unit } from './types'
+import LoginScreen from './LoginScreen'
+import type { Account, ContractForm, Position, PreviewResponse, Unit } from './types'
 import './App.css'
 
 type Status = { kind: 'idle' | 'busy' | 'error' | 'done'; message?: string }
 
+/**
+ * Quyết định hiện màn hình đăng nhập hay màn hình nhập liệu.
+ *
+ * Lúc mở trang, hỏi máy chủ xem phiên cũ còn hiệu lực không. Chưa hỏi xong
+ * thì chưa hiện gì, tránh nháy màn hình đăng nhập rồi lại biến mất.
+ */
 export default function App() {
+  const [account, setAccount] = useState<Account | null>(null)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    fetchMe()
+      .then(setAccount)
+      .catch(() => setAccount(null))
+      .finally(() => setChecking(false))
+  }, [])
+
+  if (checking) {
+    return <p className="page loading">Đang kiểm tra phiên đăng nhập…</p>
+  }
+  if (!account) {
+    return <LoginScreen onLoggedIn={setAccount} />
+  }
+  return (
+    <ContractWorkspace
+      account={account}
+      onSignedOut={() => setAccount(null)}
+    />
+  )
+}
+
+function ContractWorkspace({
+  account,
+  onSignedOut,
+}: {
+  account: Account
+  onSignedOut: () => void
+}) {
   const [units, setUnits] = useState<Unit[]>([])
   const [positions, setPositions] = useState<Position[]>([])
   const [form, setForm] = useState<ContractForm>(emptyForm)
@@ -22,13 +69,17 @@ export default function App() {
         setUnits(unitBody.units)
         setPositions(positionBody.positions)
       })
-      .catch((error: Error) =>
+      .catch((error: Error) => {
+        if (error instanceof UnauthorizedError) {
+          onSignedOut()
+          return
+        }
         setLoadError(
           `Không đọc được cấu hình từ máy chủ. ${error.message}. ` +
             'Kiểm tra backend đã chạy ở cổng 8000 chưa.',
-        ),
-      )
-  }, [])
+        )
+      })
+  }, [onSignedOut])
 
   const selectedUnit = units.find((unit) => unit.unit_id === form.unit_id)
   const selectedPosition = positions.find(
@@ -139,6 +190,10 @@ export default function App() {
       setResult(await preview(form))
       setStatus({ kind: 'done', message: 'Đã tính xong. Kiểm tra bảng bên dưới.' })
     } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        onSignedOut()
+        return
+      }
       setResult(null)
       setStatus({
         kind: 'error',
@@ -156,11 +211,20 @@ export default function App() {
       const name = await downloadPdf(form)
       setStatus({ kind: 'done', message: `Đã tải về: ${name}` })
     } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        onSignedOut()
+        return
+      }
       setStatus({
         kind: 'error',
         message: error instanceof ApiError ? error.message : String(error),
       })
     }
+  }
+
+  async function signOut() {
+    await logout()
+    onSignedOut()
   }
 
   const busy = status.kind === 'busy'
@@ -169,6 +233,20 @@ export default function App() {
   return (
     <div className="page">
       <header className="top">
+        <div className="account-bar">
+          <span>
+            {account.display_name}
+            {!account.all_units && (
+              <span className="hint">
+                {' '}
+                — chỉ cơ sở: {account.units.join(', ')}
+              </span>
+            )}
+          </span>
+          <button type="button" className="ghost small" onClick={signOut}>
+            Đăng xuất
+          </button>
+        </div>
         <h1>Tạo bộ hợp đồng lao động</h1>
         <p className="notice">
           Bản thử nghiệm. Mọi PDF đều mang dấu <b>DỮ LIỆU GIẢ — CHƯA DÙNG KÝ</b>{' '}
@@ -179,7 +257,21 @@ export default function App() {
       {loadError && <p className="alert error">{loadError}</p>}
 
       <div className="toolbar">
-        <button type="button" onClick={() => setForm(demoForm)} disabled={busy}>
+        <button
+          type="button"
+          onClick={() => {
+            // Hồ sơ mẫu gắn sẵn cơ sở Đại Dương Xanh. Tài khoản không có
+            // quyền cơ sở đó thì lấy cơ sở đầu tiên được phép.
+            const allowed = units.some((unit) => unit.unit_id === demoForm.unit_id)
+            setForm({
+              ...demoForm,
+              unit_id: allowed ? demoForm.unit_id : (units[0]?.unit_id ?? ''),
+            })
+            setResult(null)
+            setStatus({ kind: 'idle' })
+          }}
+          disabled={busy || units.length === 0}
+        >
           Điền hồ sơ mẫu để thử
         </button>
         <button

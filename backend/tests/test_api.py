@@ -1,32 +1,18 @@
-"""Kiểm thử API: cấu hình, phép tính và các lỗi đầu vào quan trọng."""
+"""Kiểm thử API: cấu hình, phép tính và các lỗi đầu vào quan trọng.
+
+Mọi endpoint đều yêu cầu đăng nhập, nên các bài dưới đây dùng một phiên đã
+đăng nhập bằng tài khoản có quyền cả 4 cơ sở.
+"""
 from __future__ import annotations
 
-import json
-import sys
 import unittest
 from copy import deepcopy
-from pathlib import Path
 
-BACKEND_DIR = Path(__file__).resolve().parent.parent
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
+from fastapi.testclient import TestClient  # noqa: F401  (dùng gián tiếp)
 
-from fastapi.testclient import TestClient  # noqa: E402
+from tests import logged_in_client, sample_request
 
-from app.config import KIT_DIR  # noqa: E402
-from app.main import app  # noqa: E402
-
-client = TestClient(app)
-
-
-def sample_request() -> dict:
-    """Lấy hồ sơ giả của contract_kit và đưa về định dạng của API."""
-    data = json.loads(
-        (KIT_DIR / "examples/employee_demo.json").read_text(encoding="utf-8")
-    )
-    for key in ("schema_version", "demo_only", "assumptions"):
-        data.pop(key, None)
-    return data
+client = logged_in_client()
 
 
 class TestConfigEndpoints(unittest.TestCase):

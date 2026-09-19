@@ -1,7 +1,19 @@
-import type { ContractForm, Position, PreviewResponse, Unit } from './types'
+import type {
+  Account,
+  ContractForm,
+  Position,
+  PreviewResponse,
+  Unit,
+} from './types'
 
 /** Lỗi có kèm thông điệp tiếng Việt do backend trả về. */
 export class ApiError extends Error {}
+
+/** Chưa đăng nhập hoặc phiên đã hết hạn. */
+export class UnauthorizedError extends ApiError {}
+
+// Luôn gửi kèm cookie phiên, kể cả khi frontend và backend khác cổng.
+const WITH_SESSION: RequestInit = { credentials: 'include' }
 
 async function readError(response: Response): Promise<string> {
   try {
@@ -22,10 +34,37 @@ async function readError(response: Response): Promise<string> {
   return `Máy chủ trả lỗi ${response.status}`
 }
 
+function fail(response: Response, message: string): never {
+  if (response.status === 401) throw new UnauthorizedError(message)
+  throw new ApiError(message)
+}
+
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path)
-  if (!response.ok) throw new ApiError(await readError(response))
+  const response = await fetch(path, WITH_SESSION)
+  if (!response.ok) fail(response, await readError(response))
   return response.json() as Promise<T>
+}
+
+export function fetchMe() {
+  return getJson<Account>('/api/me')
+}
+
+export async function login(
+  username: string,
+  password: string,
+): Promise<Account> {
+  const response = await fetch('/api/login', {
+    ...WITH_SESSION,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  if (!response.ok) throw new ApiError(await readError(response))
+  return response.json()
+}
+
+export async function logout(): Promise<void> {
+  await fetch('/api/logout', { ...WITH_SESSION, method: 'POST' })
 }
 
 export function fetchUnits() {
@@ -40,22 +79,24 @@ export function fetchPositions() {
 
 export async function preview(form: ContractForm): Promise<PreviewResponse> {
   const response = await fetch('/api/preview', {
+    ...WITH_SESSION,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(form),
   })
-  if (!response.ok) throw new ApiError(await readError(response))
+  if (!response.ok) fail(response, await readError(response))
   return response.json()
 }
 
 /** Tải PDF về máy. Trả tên file đã lưu. */
 export async function downloadPdf(form: ContractForm): Promise<string> {
   const response = await fetch('/api/generate', {
+    ...WITH_SESSION,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(form),
   })
-  if (!response.ok) throw new ApiError(await readError(response))
+  if (!response.ok) fail(response, await readError(response))
 
   const disposition = response.headers.get('Content-Disposition') ?? ''
   const matched = /filename="?([^"]+)"?/.exec(disposition)

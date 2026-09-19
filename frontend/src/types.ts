@@ -1,3 +1,10 @@
+export type Account = {
+  username: string
+  display_name: string
+  units: string[]
+  all_units: boolean
+}
+
 export type Unit = {
   unit_id: string
   code: string
