@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from app.services import ocr
@@ -246,6 +247,79 @@ class TestApi(unittest.TestCase):
             files={"anh": ("scan.pdf", the_gia_pdf(), "application/pdf")},
         ).json()
         self.assertTrue(body["is_suggestion_only"])
+
+
+class TestChiuDuocMayChuYeu(unittest.TestCase):
+    """Máy chủ gói miễn phí chỉ có một phần mười nhân xử lý."""
+
+    def test_anh_qua_lon_duoc_thu_nho(self):
+        import io
+
+        from PIL import Image
+
+        lon = Image.new("RGB", (4000, 3000), (240, 240, 240))
+        bo_nho = io.BytesIO()
+        lon.save(bo_nho, format="PNG")
+        nho = ocr._thu_nho_neu_can(bo_nho.getvalue())
+        with Image.open(io.BytesIO(nho)) as ra:
+            self.assertEqual(max(ra.size), ocr.CANH_DAI_TOI_DA)
+
+    def test_anh_vua_thi_giu_nguyen(self):
+        goc = ve_the_gia()
+        self.assertIs(ocr._thu_nho_neu_can(goc), goc)
+
+    def test_du_sau_truong_nhung_dia_chi_yeu_thi_chua_dung(self):
+        """Dừng sớm khi địa chỉ còn yếu sẽ bỏ lỡ lượt đọc cho kết quả tốt."""
+        yeu = ("Số: 079199000123\nNGUYỄN THỊ MINH AN\n"
+               "Ngày sinh: 01/01/1999\nGiới tính: Nữ\nQuốc tịch: Việt Nam\n"
+               "Nữ Quốc lch, Ngàn at, Việt Nam\n")
+        self.assertFalse(ocr._du_tot_de_dung(yeu))
+
+    def test_dia_chi_manh_thi_dung_som(self):
+        manh = ("Số: 079199000123\nNGUYỄN THỊ MINH AN\n"
+                "Ngày sinh: 01/01/1999\nGiới tính: Nữ\nQuốc tịch: Việt Nam\n"
+                "Nơi thường trú: 320/3/3 Gò Dầu, Phường Tân Sơn Nhì, "
+                "Thành phố Hồ Chí Minh\n")
+        self.assertTrue(ocr._du_tot_de_dung(manh))
+
+    def test_mot_luot_qua_gio_khong_lam_hong_ca_yeu_cau(self):
+        """Lượt nào quá giờ thì bỏ lượt đó, giữ kết quả các lượt khác."""
+        import subprocess as sp
+
+        goi = 0
+
+        def gia(lenh, giay=None):
+            nonlocal goi
+            goi += 1
+            if goi == 1:
+                raise RuntimeError("quá thời gian")
+            Path(lenh[2]).with_suffix(".txt").write_text(
+                "Nơi thường trú: 320/3/3 Gò Dầu, Phường Tân Sơn Nhì, "
+                "Thành phố Hồ Chí Minh\n", encoding="utf-8")
+            return sp.CompletedProcess(lenh, 0, "", "")
+
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            with mock.patch.object(ocr, "_chay", gia):
+                ra = ocr._doc_nhieu_luot("tesseract", Path("a.png"), Path(d))
+        self.assertIn("Gò Dầu", ra)
+
+
+class TestNoiTiepDiaChi(unittest.TestCase):
+    def test_ghep_dong_bi_xuong_dong(self):
+        van_ban = ("Nơi thường trú:\n"
+                   "320/3/3 Gò Dầu, Khu phố 18, Phường Tân Sơn Nhì, Thành\n"
+                   "phố Hồ Chí Minh\n")
+        dia_chi = ocr.tach_truong(van_ban)["permanent_address"]
+        self.assertTrue(dia_chi.endswith("Thành phố Hồ Chí Minh"), dia_chi)
+
+    def test_khong_ghep_dong_bat_dau_bang_chu_hoa(self):
+        van_ban = ("Nơi thường trú:\n"
+                   "320/3/3 Gò Dầu, Phường Tân Sơn Nhì, Thành phố Hồ Chí Minh\n"
+                   "Nơi tạm trú: Không có\n")
+        dia_chi = ocr.tach_truong(van_ban)["permanent_address"]
+        self.assertNotIn("tạm trú", dia_chi)
 
 
 class TestNhieuTep(unittest.TestCase):

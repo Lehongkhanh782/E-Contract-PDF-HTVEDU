@@ -21,6 +21,9 @@ from pathlib import Path
 # Ảnh căn cước chụp bằng điện thoại thường dưới 5 MB.
 GIOI_HAN_BYTE = 8 * 1024 * 1024
 KICH_THUOC_TOI_DA = (6000, 6000)
+# Ảnh điện thoại thường 3000 đến 4000 điểm. Thu về mức này vẫn đọc tốt mà
+# nhanh hơn nhiều trên máy chủ yếu.
+CANH_DAI_TOI_DA = 2400
 THOI_GIAN_TOI_DA = 45
 
 # Tesseract chỉ chiếm khoảng 39 MB nhưng vẫn giới hạn số lượt chạy cùng lúc
@@ -208,6 +211,25 @@ def _doc_pdf(du_lieu: bytes) -> str:
         return "\n".join(phan)
 
 
+def _thu_nho_neu_can(du_lieu: bytes) -> bytes:
+    """Thu ảnh quá lớn về kích thước vừa đủ để đọc, cho nhanh."""
+    import io
+
+    from PIL import Image
+
+    with Image.open(io.BytesIO(du_lieu)) as anh:
+        if max(anh.size) <= CANH_DAI_TOI_DA:
+            return du_lieu
+        ty_le = CANH_DAI_TOI_DA / max(anh.size)
+        nho = anh.convert("RGB").resize(
+            (round(anh.width * ty_le), round(anh.height * ty_le)),
+            Image.LANCZOS,
+        )
+        bo_nho = io.BytesIO()
+        nho.save(bo_nho, format="PNG")
+        return bo_nho.getvalue()
+
+
 def doc_van_ban(du_lieu: bytes) -> str:
     """Đọc ảnh hoặc PDF và trả về văn bản thô."""
     if la_pdf(du_lieu):
@@ -225,8 +247,8 @@ def doc_van_ban(du_lieu: bytes) -> str:
         raise RuntimeError("Máy chủ đang bận đọc ảnh khác. Chờ một lát rồi thử lại.")
     try:
         with tempfile.TemporaryDirectory(prefix="econtract_ocr_") as thu_muc:
-            goc = Path(thu_muc) / "anh"
-            goc.write_bytes(du_lieu)
+            goc = Path(thu_muc) / "anh.png"
+            goc.write_bytes(_thu_nho_neu_can(du_lieu))
             return _doc_nhieu_luot(lenh, goc, Path(thu_muc))
     finally:
         _cong_ocr.release()
@@ -241,19 +263,49 @@ CHE_DO = (3, 11, 6)
 CHE_DO_PDF = (3, 11)
 
 
+# Chỉ dừng sớm khi địa chỉ đạt mức điểm này. Đủ sáu trường thôi chưa đủ:
+# lượt đọc đầu có thể trả về một mảnh rác vẫn qua được bộ lọc, trong khi
+# lượt sau mới lấy đúng dòng địa chỉ. Đo trên dữ liệu thật: mảnh rác và
+# địa chỉ mờ đều quanh 11 điểm, địa chỉ đọc rõ đạt gần 30.
+DIEM_DIA_CHI_DU_TOT = 16
+
+
+def _du_tot_de_dung(van_ban: str) -> bool:
+    truong = tach_truong(van_ban)
+    if not all(truong.values()):
+        return False
+    return _diem_dia_chi(truong["permanent_address"] or "") >= DIEM_DIA_CHI_DU_TOT
+
+
 def _doc_nhieu_luot(tesseract: str, anh: Path, thu_muc: Path,
                     che_do_list: tuple[int, ...] = CHE_DO) -> str:
-    phan = []
+    """Đọc lần lượt từng chế độ, đủ trường thì dừng.
+
+    Máy chủ gói miễn phí chỉ có một phần mười nhân xử lý nên mỗi lượt đọc
+    chậm hơn máy phát triển hàng chục lần. Chạy đủ ba lượt mọi lúc là lý do
+    người dùng gặp lỗi quá thời gian. Lượt nào quá giờ thì bỏ qua lượt đó
+    chứ không làm hỏng cả yêu cầu.
+    """
+    phan: list[str] = []
     for che_do in che_do_list:
         ra = thu_muc / f"ra{che_do}"
-        ket_qua = _chay(
-            [tesseract, str(anh), str(ra), "-l", "vie", "--psm", str(che_do)]
-        )
+        try:
+            ket_qua = _chay(
+                [tesseract, str(anh), str(ra), "-l", "vie", "--psm", str(che_do)]
+            )
+        except RuntimeError:
+            continue
         tep = ra.with_suffix(".txt")
         if ket_qua.returncode == 0 and tep.is_file():
             phan.append(tep.read_text(encoding="utf-8", errors="replace"))
+            gop = "\n".join(phan)
+            if _du_tot_de_dung(gop):
+                return gop
     if not phan:
-        raise RuntimeError("Tesseract không đọc được ảnh này")
+        raise RuntimeError(
+            "Máy chủ không đọc được tệp này trong thời gian cho phép. "
+            "Thử chụp thẳng thẻ bằng điện thoại, ảnh nhỏ gọn hơn."
+        )
     return "\n".join(phan)
 
 
@@ -546,7 +598,19 @@ def _tim_dia_chi(dong: list[str]) -> str | None:
     if tot_nhat is None:
         return None
 
-    return tot_nhat[2]
+    diem, chi_so, ket_qua = tot_nhat
+    # Địa chỉ dài hay bị xuống dòng giữa chừng, ví dụ "... Thành" rồi dòng
+    # sau là "phố Hồ Chí Minh". Dòng nối tiếp luôn bắt đầu bằng chữ thường.
+    for tiep in dong[chi_so + 1:]:
+        sach = _bo_nhieu(tiep)
+        if not sach:
+            continue
+        if len(sach) <= 40 and sach[0].islower() and not re.search(r"\d{4,}", sach):
+            if any(t in _khong_dau(sach) for t in TU_NHAN):
+                break
+            return f"{ket_qua} {sach}"
+        break
+    return ket_qua
 
 
 def tach_truong(van_ban: str) -> dict[str, str | None]:
