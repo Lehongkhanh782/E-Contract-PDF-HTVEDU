@@ -568,6 +568,30 @@
       ]
     },
     {
+      "field": "employer.workplace_address",
+      "source": "unit_config_user_confirmation_2026-09-19",
+      "locations": [
+        {
+          "field": "employer.workplace_address",
+          "template": "Hop_dong_va_phu_luc_template.docx",
+          "source_body_paragraph_index": 22,
+          "source_location_index_base": 0
+        }
+      ]
+    },
+    {
+      "field": "employer.workplace_institution_name",
+      "source": "unit_config_user_confirmation_2026-09-19",
+      "locations": [
+        {
+          "field": "employer.workplace_institution_name",
+          "template": "Hop_dong_va_phu_luc_template.docx",
+          "source_body_paragraph_index": 22,
+          "source_location_index_base": 0
+        }
+      ]
+    },
+    {
       "field": "job.role_label",
       "source": "configured_position",
       "locations": [

@@ -75,16 +75,59 @@ jobs:
         run: |
           set -e
           for don_vi in vuon_sang_tao victoria gau_panda dai_duong_xanh; do
-            echo "--- $don_vi ---"
+            echo "--- $don_vi (giáo viên, có thỏa thuận) ---"
             python generate_demo.py --unit "$don_vi" --output "out/$don_vi.pdf"
             # PDF hỏng thường nhỏ bất thường; chặn trường hợp file rỗng.
             kich_thuoc=$(stat -c%s "out/$don_vi.pdf")
             echo "$don_vi: $kich_thuoc bytes"
             test "$kich_thuoc" -gt 50000
             # Mỗi phần phải bắt đầu ở trang lẻ để in hai mặt tách tờ được,
-            # và mức bồi thường phải đúng theo từng đơn vị.
-            python kiem_tra_bo_cuc.py "out/$don_vi.pdf" --unit "$don_vi"
+            # mức bồi thường và nơi làm việc phải đúng theo từng đơn vị.
+            python kiem_tra_bo_cuc.py "out/$don_vi.pdf" \
+              --unit "$don_vi" --position english_teacher
           done
+
+      - name: Vị trí không phải ký thỏa thuận thì PDF không được có tờ đó
+        working-directory: contract_kit
+        run: |
+          set -e
+          python - <<'PYEOF'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("examples/employee_demo.json").read_text(encoding="utf-8"))
+          data["job"]["position_id"] = "principal"
+          # Hiệu trưởng có lương cơ bản 7.000.000 nên Gross phải cao hơn mức đó.
+          data["compensation"].update({
+              "salary_amount": "9000000",
+              "insurance_base": "7000000",
+              "employer_union_base": "7000000",
+              "employee_union_base": "7000000",
+          })
+          Path("out").mkdir(exist_ok=True)
+          Path("out/hieu_truong.json").write_text(
+              json.dumps(data, ensure_ascii=False), encoding="utf-8")
+          PYEOF
+          python generate_demo.py --unit victoria \
+            --input out/hieu_truong.json --output out/hieu_truong.pdf
+          python kiem_tra_bo_cuc.py out/hieu_truong.pdf \
+            --unit victoria --position principal
+
+      - name: Bài kiểm tra bố cục phải bắt được sai lệch
+        working-directory: contract_kit
+        run: |
+          set -e
+          # Khai sai vị trí thì phải báo lỗi. Nếu không, bài kiểm tra vô dụng.
+          if python kiem_tra_bo_cuc.py out/hieu_truong.pdf \
+               --unit victoria --position english_teacher; then
+            echo "Bài kiểm tra bố cục không bắt được thiếu thỏa thuận"
+            exit 1
+          fi
+          if python kiem_tra_bo_cuc.py out/victoria.pdf \
+               --unit victoria --position principal; then
+            echo "Bài kiểm tra bố cục không bắt được thừa thỏa thuận"
+            exit 1
+          fi
+          echo "Bài kiểm tra bố cục hoạt động đúng"
 
       - name: Giữ lại PDF để tải về xem
         uses: actions/upload-artifact@v4

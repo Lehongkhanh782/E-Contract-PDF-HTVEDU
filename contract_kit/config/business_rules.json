@@ -40,31 +40,36 @@
       "position_id": "principal",
       "title": "Hiệu trưởng",
       "role_label": "Hiệu trưởng",
-      "base_wage": "7000000"
+      "base_wage": "7000000",
+      "requires_responsibility_agreement": false
     },
     {
       "position_id": "preschool_teacher",
       "title": "Giáo viên mầm non",
       "role_label": "Giáo viên",
-      "base_wage": "5310000"
+      "base_wage": "5310000",
+      "requires_responsibility_agreement": true
     },
     {
       "position_id": "english_teacher",
       "title": "Giáo viên Tiếng Anh",
       "role_label": "Giáo viên",
-      "base_wage": "5310000"
+      "base_wage": "5310000",
+      "requires_responsibility_agreement": true
     },
     {
       "position_id": "nanny",
       "title": "Bảo mẫu",
       "role_label": "Bảo mẫu",
-      "base_wage": "5310000"
+      "base_wage": "5310000",
+      "requires_responsibility_agreement": true
     },
     {
       "position_id": "admissions_marketing",
       "title": "Tuyển sinh Marketing",
       "role_label": "Nhân viên tuyển sinh Marketing",
-      "base_wage": "5310000"
+      "base_wage": "5310000",
+      "requires_responsibility_agreement": false
     }
   ],
   "positions_status": "base_wages_confirmed_by_user",
@@ -74,7 +79,7 @@
   "liability_policy": {
     "amount_source": "units.json -> liability_amount",
     "status": "confirmed_per_unit_2026-09-19",
-    "note": "Mức bồi thường khác nhau theo đơn vị. Phạm vi chức danh áp dụng chưa được xác nhận; hiện áp dụng cho mọi vị trí.",
-    "position_scope_status": "pending_user_confirmation"
+    "note": "Mức bồi thường khác nhau theo đơn vị. Chỉ các vị trí trực tiếp dạy và trông trẻ mới kèm thỏa thuận trách nhiệm.",
+    "position_scope_status": "confirmed_teaching_and_childcare_only_2026-09-19"
   }
 }

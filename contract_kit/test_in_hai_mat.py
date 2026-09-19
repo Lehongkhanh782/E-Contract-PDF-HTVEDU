@@ -12,6 +12,7 @@ from pathlib import Path
 
 from generate_demo import (
     build_context,
+    can_thoa_thuan,
     doc_so_tien,
     load_json,
     money,
@@ -122,12 +123,122 @@ class TestMucBoiThuongTheoDonVi(unittest.TestCase):
         self.assertIn("{{ responsibility.liability_amount_words }}", text)
 
 
+class TestAiPhaiKyThoaThuan(unittest.TestCase):
+    """Chỉ người trực tiếp dạy và trông trẻ mới kèm thỏa thuận trách nhiệm."""
+
+    CAN_KY = {
+        "principal": False,
+        "preschool_teacher": True,
+        "english_teacher": True,
+        "nanny": True,
+        "admissions_marketing": False,
+    }
+
+    def test_cau_hinh_khai_du_nam_vi_tri(self):
+        rules = load_json(ROOT / "config/business_rules.json")["positions"]
+        thuc_te = {p["position_id"]: p["requires_responsibility_agreement"]
+                   for p in rules}
+        self.assertEqual(thuc_te, self.CAN_KY)
+
+    def test_ham_tra_dung_cho_tung_vi_tri(self):
+        for position_id, mong_doi in self.CAN_KY.items():
+            with self.subTest(vi_tri=position_id):
+                self.assertEqual(
+                    can_thoa_thuan({"job": {"position_id": position_id}}),
+                    mong_doi,
+                )
+
+    def test_thieu_co_trong_cau_hinh_thi_bao_loi(self):
+        import generate_demo
+
+        goc = generate_demo.load_json
+
+        def gia(path):
+            data = goc(path)
+            if path.name == "business_rules.json":
+                for vi_tri in data["positions"]:
+                    vi_tri.pop("requires_responsibility_agreement", None)
+            return data
+
+        generate_demo.load_json = gia
+        try:
+            with self.assertRaises(ValueError) as bat:
+                can_thoa_thuan({"job": {"position_id": "nanny"}})
+            self.assertIn("requires_responsibility_agreement", str(bat.exception))
+        finally:
+            generate_demo.load_json = goc
+
+
+class TestNoiLamViec(unittest.TestCase):
+    """Nơi làm việc tách khỏi địa chỉ đăng ký kinh doanh."""
+
+    def test_victoria_lam_viec_o_dia_chi_khac(self):
+        units = {u["unit_id"]: u
+                 for u in load_json(ROOT / "config/units.json")["units"]}
+        vic = units["victoria"]
+        self.assertNotEqual(vic["workplace_address"], vic["address"])
+        self.assertEqual(
+            vic["workplace_institution_name"], "Trường Mầm non Ngôi Nhà Ánh Dương"
+        )
+        self.assertIn("Đường số 33", vic["workplace_address"])
+        # Pháp nhân ký hợp đồng vẫn là Victoria.
+        self.assertIn("VICTORIA", vic["legal_name"])
+
+    def test_ba_don_vi_con_lai_lam_viec_tai_dia_chi_dang_ky(self):
+        units = load_json(ROOT / "config/units.json")["units"]
+        for unit in units:
+            if unit["unit_id"] == "victoria":
+                continue
+            with self.subTest(unit=unit["unit_id"]):
+                self.assertEqual(unit["workplace_address"], unit["address"])
+                self.assertEqual(
+                    unit["workplace_institution_name"], unit["institution_name"]
+                )
+
+    def test_moi_don_vi_deu_khai_du_noi_lam_viec(self):
+        for unit in load_json(ROOT / "config/units.json")["units"]:
+            with self.subTest(unit=unit["unit_id"]):
+                self.assertTrue(unit.get("workplace_address"))
+                self.assertTrue(unit.get("workplace_institution_name"))
+
+    def test_context_dien_noi_lam_viec_chu_khong_phai_dia_chi_dang_ky(self):
+        context, _ = build_context("victoria", ho_so_thu(), chinh_sach())
+        employer = context["employer"]
+        self.assertEqual(
+            employer["workplace_institution_name"],
+            "Trường Mầm non Ngôi Nhà Ánh Dương",
+        )
+        self.assertNotEqual(employer["workplace_address"], employer["address"])
+
+    def test_mau_hop_dong_dung_bien_noi_lam_viec(self):
+        from zipfile import ZipFile
+
+        from lxml import etree
+
+        ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        mau = ROOT / "templates/Hop_dong_va_phu_luc_template.docx"
+        with ZipFile(mau) as z:
+            root = etree.fromstring(z.read("word/document.xml"))
+        text = "".join(root.xpath("//w:t/text()", namespaces=ns))
+        self.assertIn(
+            "{{ employer.workplace_institution_name }} tại địa chỉ "
+            "{{ employer.workplace_address }}",
+            text,
+        )
+        # Khối bên sử dụng lao động vẫn dùng địa chỉ đăng ký.
+        self.assertIn("Địa chỉ: {{ employer.address }}", text)
+
+
 class TestBanDoTruong(unittest.TestCase):
-    def test_hai_bien_moi_co_trong_ban_do(self):
+    def test_cac_bien_moi_co_trong_ban_do(self):
         d = load_json(ROOT / "config/field_map.json")
         ten = {f["field"] for f in d["fields"]}
-        self.assertIn("responsibility.liability_amount", ten)
-        self.assertIn("responsibility.liability_amount_words", ten)
+        for bien in ("responsibility.liability_amount",
+                     "responsibility.liability_amount_words",
+                     "employer.workplace_address",
+                     "employer.workplace_institution_name"):
+            with self.subTest(bien=bien):
+                self.assertIn(bien, ten)
 
 
 if __name__ == "__main__":

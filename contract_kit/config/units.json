@@ -24,11 +24,13 @@
       "legal_name_source": "user_message_2026-09-19",
       "institution_name_status": "derived_display_label_pending_confirmation",
       "header_status": "parent_company_header_adapted_from_source_pending_review",
-      "workplace_address_status": "using_registered_address_for_demo_pending_confirmation",
+      "workplace_address_status": "confirmed_user_2026-09-19_same_as_registered",
       "template_applicability": "pending_review",
       "production_ready": false,
       "liability_amount": "20000000",
-      "liability_amount_source": "user_confirmation_2026-09-19"
+      "liability_amount_source": "user_confirmation_2026-09-19",
+      "workplace_institution_name": "Trường Mầm non Song ngữ Vườn Sáng Tạo",
+      "workplace_address": "17 Bùi Huy Bích, phường Phú Định, Thành phố Hồ Chí Minh"
     },
     {
       "unit_id": "victoria",
@@ -53,11 +55,13 @@
       "legal_name_source": "user_message_2026-09-19",
       "institution_name_status": "derived_display_label_pending_confirmation",
       "header_status": "parent_company_header_adapted_from_source_pending_review",
-      "workplace_address_status": "using_registered_address_for_demo_pending_confirmation",
+      "workplace_address_status": "confirmed_user_2026-09-19_differs_from_registered",
       "template_applicability": "pending_review",
       "production_ready": false,
       "liability_amount": "20000000",
-      "liability_amount_source": "user_confirmation_2026-09-19"
+      "liability_amount_source": "user_confirmation_2026-09-19",
+      "workplace_institution_name": "Trường Mầm non Ngôi Nhà Ánh Dương",
+      "workplace_address": "1/4 Đường số 33, Phường An Khánh, Thành phố Hồ Chí Minh"
     },
     {
       "unit_id": "gau_panda",
@@ -82,11 +86,13 @@
       "legal_name_source": "user_message_2026-09-19",
       "institution_name_status": "derived_display_label_pending_confirmation",
       "header_status": "parent_company_header_adapted_from_source_pending_review",
-      "workplace_address_status": "using_registered_address_for_demo_pending_confirmation",
+      "workplace_address_status": "confirmed_user_2026-09-19_same_as_registered",
       "template_applicability": "pending_review",
       "production_ready": false,
       "liability_amount": "10000000",
-      "liability_amount_source": "user_confirmation_2026-09-19"
+      "liability_amount_source": "user_confirmation_2026-09-19",
+      "workplace_institution_name": "Trường Mầm non Gấu Panda",
+      "workplace_address": "946/6 Tân Kỳ Tân Quý, Phường Bình Hưng Hoà, Thành phố Hồ Chí Minh."
     },
     {
       "unit_id": "dai_duong_xanh",
@@ -111,12 +117,14 @@
       "legal_name_source": "user_message_2026-09-19",
       "institution_name_status": "derived_display_label_pending_confirmation",
       "header_status": "parent_company_header_adapted_from_source_pending_review",
-      "workplace_address_status": "using_registered_address_for_demo_pending_confirmation",
+      "workplace_address_status": "confirmed_user_2026-09-19_same_as_registered",
       "template_applicability": "pending_review",
       "production_ready": false,
       "tax_code_status": "reconfirmed_by_user",
       "liability_amount": "20000000",
-      "liability_amount_source": "user_confirmation_2026-09-19"
+      "liability_amount_source": "user_confirmation_2026-09-19",
+      "workplace_institution_name": "Trường Mầm non Đại Dương Xanh",
+      "workplace_address": "02-04 Đường số 34, Phường An Lạc, Thành phố Hồ Chí Minh, Việt Nam."
     }
   ]
 }

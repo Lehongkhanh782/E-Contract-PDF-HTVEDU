@@ -17,6 +17,7 @@ from app.config import KIT_DIR, TEMPLATE_DIR, salary_policy
 # Import sau config vì config đã thêm contract_kit vào sys.path.
 from generate_demo import (  # noqa: E402  (phụ thuộc thứ tự sys.path)
     build_context,
+    can_thoa_thuan,
     convert_to_pdf,
     merge_demo_pdf,
     page_count_label,
@@ -112,6 +113,8 @@ def _build_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
     soffice = _soffice()
     font = _font()
     context, result = build_context(unit_id, payload, salary_policy())
+    # Chỉ vị trí trực tiếp dạy và trông trẻ mới kèm thỏa thuận trách nhiệm.
+    kem_thoa_thuan = can_thoa_thuan(payload)
 
     contract_template = TEMPLATE_DIR / "Hop_dong_va_phu_luc_template.docx"
     agreement_template = TEMPLATE_DIR / "Thoa_thuan_trach_nhiem_template.docx"
@@ -123,20 +126,23 @@ def _build_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
 
         render_docx(contract_template, contract_docx, context)
         contract_pdf = convert_to_pdf(contract_docx, work / "pdf", soffice)
+        bo_file = [contract_pdf]
 
-        # Số trang thỏa thuận được in trong chính văn bản, nên phải render lại
-        # cho tới khi con số điền vào khớp số trang thật.
-        for _ in range(MAX_PAGE_PASSES):
-            render_docx(agreement_template, agreement_docx, context)
-            agreement_pdf = convert_to_pdf(agreement_docx, work / "pdf", soffice)
-            actual = len(PdfReader(agreement_pdf).pages)
-            if context["responsibility"]["page_count_label"] == page_count_label(actual):
-                break
-            context["responsibility"]["page_count_label"] = page_count_label(actual)
-        else:
-            raise RuntimeError("Số trang thỏa thuận chưa ổn định sau nhiều lần dựng")
+        if kem_thoa_thuan:
+            # Số trang thỏa thuận được in trong chính văn bản, nên phải
+            # render lại cho tới khi con số điền vào khớp số trang thật.
+            for _ in range(MAX_PAGE_PASSES):
+                render_docx(agreement_template, agreement_docx, context)
+                agreement_pdf = convert_to_pdf(agreement_docx, work / "pdf", soffice)
+                actual = len(PdfReader(agreement_pdf).pages)
+                if context["responsibility"]["page_count_label"] == page_count_label(actual):
+                    break
+                context["responsibility"]["page_count_label"] = page_count_label(actual)
+            else:
+                raise RuntimeError("Số trang thỏa thuận chưa ổn định sau nhiều lần dựng")
+            bo_file.append(agreement_pdf)
 
-        merge_demo_pdf([contract_pdf, agreement_pdf], destination, font)
+        merge_demo_pdf(bo_file, destination, font)
 
     return {
         "demo_only": True,
@@ -146,6 +152,7 @@ def _build_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
         "salary_mode": payload["compensation"]["salary_mode"],
         "salary_amount": payload["compensation"]["salary_amount"],
         "signing_and_effective_date": payload["signing_date"],
+        "includes_responsibility_agreement": kem_thoa_thuan,
         "sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
         "policy_status": salary_policy()["status"],
     }

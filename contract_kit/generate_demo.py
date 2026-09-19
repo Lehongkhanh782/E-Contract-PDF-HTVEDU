@@ -174,6 +174,21 @@ def selected_position(data: dict) -> dict:
     return matches[0]
 
 
+def can_thoa_thuan(data: dict) -> bool:
+    """Vị trí này có phải ký thỏa thuận trách nhiệm không.
+
+    Chỉ các vị trí trực tiếp dạy và trông trẻ mới kèm tờ này. Cấu hình
+    thiếu cờ thì dừng lại, không tự đoán.
+    """
+    position = selected_position(data)
+    if "requires_responsibility_agreement" not in position:
+        raise ValueError(
+            f"Vị trí {position['position_id']} chưa khai "
+            "requires_responsibility_agreement trong business_rules.json"
+        )
+    return bool(position["requires_responsibility_agreement"])
+
+
 def calculate_example(data: dict, policy: dict) -> dict:
     """Gross/Net demo with explicitly supplied fixed example deductions."""
     if policy.get("status") != "example_only":
@@ -367,16 +382,20 @@ def merge_demo_pdf(paths: list[Path], output: Path, font_path: Path):
     from reportlab.pdfbase.ttfonts import TTFont
 
     pdfmetrics.registerFont(TTFont("DemoNotice", str(font_path)))
-    contract_pdf, agreement_pdf = paths
+    if not 1 <= len(paths) <= 2:
+        raise ValueError("Cần một file hợp đồng, kèm hoặc không kèm thỏa thuận")
+    contract_pdf = paths[0]
     trang_hop_dong, trang_phu_luc = tach_hop_dong_va_phu_luc(contract_pdf)
-    agreement_reader = PdfReader(agreement_pdf)
 
     phan = [
         ("Hợp đồng lao động", contract_pdf, trang_hop_dong),
         ("Phụ lục lương", contract_pdf, trang_phu_luc),
-        ("Thỏa thuận trách nhiệm", agreement_pdf,
-         list(range(len(agreement_reader.pages)))),
     ]
+    # Vị trí không phải ký thỏa thuận thì bộ hồ sơ chỉ có hai phần.
+    if len(paths) == 2:
+        agreement_pdf = paths[1]
+        phan.append(("Thỏa thuận trách nhiệm", agreement_pdf,
+                     list(range(len(PdfReader(agreement_pdf).pages)))))
 
     writer = PdfWriter()
     moc = []
@@ -449,28 +468,33 @@ def main():
     if not args.font.exists():
         raise SystemExit("Truyền --font tới file TTF hỗ trợ tiếng Việt")
     from pypdf import PdfReader
+    kem_thoa_thuan = can_thoa_thuan(data)
     with tempfile.TemporaryDirectory(prefix="contract_demo_") as folder:
         work = Path(folder)
         contract_docx = work / "DEMO_Hop_dong_va_phu_luc.docx"
         agreement_docx = work / "DEMO_Thoa_thuan.docx"
         render_docx(templates[0], contract_docx, context)
         contract_pdf = convert_to_pdf(contract_docx, work / "pdf", args.soffice)
-        for _ in range(3):
-            render_docx(templates[1], agreement_docx, context)
-            agreement_pdf = convert_to_pdf(agreement_docx, work / "pdf", args.soffice)
-            actual = len(PdfReader(agreement_pdf).pages)
-            if context["responsibility"]["page_count_label"] == page_count_label(actual):
-                break
-            context["responsibility"]["page_count_label"] = page_count_label(actual)
-        else:
-            raise RuntimeError("Số trang thỏa thuận chưa ổn định")
-        merge_demo_pdf([contract_pdf, agreement_pdf], args.output, args.font)
+        bo_file = [contract_pdf]
+        if kem_thoa_thuan:
+            for _ in range(3):
+                render_docx(templates[1], agreement_docx, context)
+                agreement_pdf = convert_to_pdf(agreement_docx, work / "pdf", args.soffice)
+                actual = len(PdfReader(agreement_pdf).pages)
+                if context["responsibility"]["page_count_label"] == page_count_label(actual):
+                    break
+                context["responsibility"]["page_count_label"] = page_count_label(actual)
+            else:
+                raise RuntimeError("Số trang thỏa thuận chưa ổn định")
+            bo_file.append(agreement_pdf)
+        merge_demo_pdf(bo_file, args.output, args.font)
     write_json(args.output.with_suffix(".calculation.json"), {
         "demo_only": True, "unit_id": args.unit, "calculation": result,
         "position_id": data["job"]["position_id"],
         "salary_mode": data["compensation"]["salary_mode"],
         "salary_amount": data["compensation"]["salary_amount"],
         "signing_and_effective_date": data["signing_date"],
+        "includes_responsibility_agreement": kem_thoa_thuan,
         "sha256": hashlib.sha256(args.output.read_bytes()).hexdigest(),
         "policy_status": policy["status"],
     })
