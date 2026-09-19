@@ -17,11 +17,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Cài Tesseract để kiểm thử phần đọc ảnh
+      - name: Cài Tesseract và poppler để kiểm thử phần đọc giấy tờ
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            tesseract-ocr tesseract-ocr-vie fonts-dejavu-core
+            tesseract-ocr tesseract-ocr-vie poppler-utils fonts-dejavu-core
 
       - name: Cài thư viện
         run: pip install -r backend/requirements.txt

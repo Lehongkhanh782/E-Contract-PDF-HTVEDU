@@ -14,7 +14,7 @@ from starlette.background import BackgroundTask
 from app import config
 from app.auth import User
 from app.deps import current_user, require_unit
-from app.schemas import ContractRequest
+from app.schemas import ContractRequest, SalaryRequest
 from app.services import documents, ocr
 
 router = APIRouter(prefix="/api")
@@ -97,8 +97,10 @@ def ocr_status(_: User = Depends(current_user)) -> dict:
     """Máy chủ có đọc được ảnh giấy tờ không."""
     return {
         "available": ocr.san_sang(),
+        "pdf": ocr.ho_tro_pdf(),
         "fields": ocr.TRUONG,
         "max_bytes": ocr.GIOI_HAN_BYTE,
+        "max_pdf_pages": ocr.SO_TRANG_TOI_DA,
         "note": (
             "Kết quả chỉ là gợi ý để điền nhanh. Nhân sự phải đọc lại từng ô."
         ),
@@ -135,6 +137,22 @@ async def ocr_giay_to(
         raise HTTPException(status_code=503, detail=str(loi)) from loi
 
     return JSONResponse(ket_qua)
+
+
+@router.post("/salary")
+def salary(request: SalaryRequest,
+           _: User = Depends(current_user)) -> JSONResponse:
+    """Tính lương ngay khi nhân sự đang gõ, chưa cần điền xong hồ sơ."""
+    try:
+        ket_qua = documents.tinh_luong(request.position_id,
+                                       request.to_kit_payload())
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return JSONResponse({
+        "demo_only": True,
+        "calculation": ket_qua,
+        "policy_status": config.salary_policy()["status"],
+    })
 
 
 @router.post("/preview")

@@ -7,14 +7,14 @@ import {
   fetchPositions,
   fetchUnits,
   logout,
-  preview,
 } from './api'
 import { Field, Section, Select, TextArea } from './components'
 import { demoForm, digitsOnly, emptyForm, formatMoney } from './defaults'
 import Brand, { MO_TA_PHIEN_BAN, PHIEN_BAN } from './Brand'
 import IdCardReader from './IdCardReader'
+import SalaryTable from './SalaryTable'
 import LoginScreen from './LoginScreen'
-import type { Account, ContractForm, Position, PreviewResponse, Unit } from './types'
+import type { Account, ContractForm, Position, Unit } from './types'
 import './App.css'
 
 type Status = { kind: 'idle' | 'busy' | 'error' | 'done'; message?: string }
@@ -60,7 +60,6 @@ function ContractWorkspace({
   const [units, setUnits] = useState<Unit[]>([])
   const [positions, setPositions] = useState<Position[]>([])
   const [form, setForm] = useState<ContractForm>(emptyForm)
-  const [result, setResult] = useState<PreviewResponse | null>(null)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showSchedule, setShowSchedule] = useState(false)
@@ -97,12 +96,10 @@ function ContractWorkspace({
       ...current,
       [key]: { ...(current[key] as object), ...value },
     }))
-    setResult(null)
   }
 
   function setTop<K extends keyof ContractForm>(key: K, value: ContractForm[K]) {
     setForm((current) => ({ ...current, [key]: value }))
-    setResult(null)
   }
 
   /**
@@ -124,7 +121,22 @@ function ContractWorkspace({
           }
         : current.compensation,
     }))
-    setResult(null)
+  }
+
+  /**
+   * Sửa căn cứ bảo hiểm thì kéo theo hai căn cứ công đoàn, vì trong hồ sơ
+   * mẫu ba giá trị này bằng nhau. Muốn khác nhau thì mở mục 5 sửa riêng.
+   */
+  function chooseInsuranceBase(value: string) {
+    setForm((current) => ({
+      ...current,
+      compensation: {
+        ...current.compensation,
+        insurance_base: value,
+        employer_union_base: value,
+        employee_union_base: value,
+      },
+    }))
   }
 
   /**
@@ -147,7 +159,6 @@ function ContractWorkspace({
         liability_to: current.responsibility.liability_to,
       },
     }))
-    setResult(null)
   }
 
   function chooseEndDate(value: string) {
@@ -164,7 +175,6 @@ function ContractWorkspace({
         liability_to: current.responsibility.liability_to || value,
       },
     }))
-    setResult(null)
   }
 
   const missing = useMemo(() => {
@@ -185,24 +195,6 @@ function ContractWorkspace({
     ]
     return required.filter(([, value]) => !value.trim()).map(([label]) => label)
   }, [form])
-
-  async function runPreview() {
-    setStatus({ kind: 'busy', message: 'Đang tính…' })
-    try {
-      setResult(await preview(form))
-      setStatus({ kind: 'done', message: 'Đã tính xong. Kiểm tra bảng bên dưới.' })
-    } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        onSignedOut()
-        return
-      }
-      setResult(null)
-      setStatus({
-        kind: 'error',
-        message: error instanceof ApiError ? error.message : String(error),
-      })
-    }
-  }
 
   async function runDownload() {
     setStatus({
@@ -269,7 +261,6 @@ function ContractWorkspace({
               ...demoForm,
               unit_id: allowed ? demoForm.unit_id : (units[0]?.unit_id ?? ''),
             })
-            setResult(null)
             setStatus({ kind: 'idle' })
           }}
           disabled={busy || units.length === 0}
@@ -281,7 +272,6 @@ function ContractWorkspace({
           className="ghost"
           onClick={() => {
             setForm(emptyForm)
-            setResult(null)
             setStatus({ kind: 'idle' })
           }}
           disabled={busy}
@@ -447,7 +437,7 @@ function ContractWorkspace({
 
       <Section
         title="4. Lương"
-        hint="Chọn Gross thì hệ thống trừ ra Net. Chọn Net thì hệ thống tìm Gross tương ứng. Các tỷ lệ khấu trừ hiện là chính sách minh họa, chưa xác nhận cho hồ sơ thật."
+        hint="Chọn Gross thì hệ thống trừ ra Net. Chọn Net thì hệ thống tìm Gross tương ứng. Bảng lương bên dưới tự cập nhật theo số bạn nhập."
       >
         <Select
           label="Kiểu lương"
@@ -479,37 +469,18 @@ function ContractWorkspace({
           label="Căn cứ đóng bảo hiểm"
           required
           inputMode="numeric"
-          hint={formatMoney(form.compensation.insurance_base) || 'Tự điền theo vị trí'}
+          hint={
+            form.compensation.insurance_base
+              ? `${formatMoney(form.compensation.insurance_base)} đ — tự điền theo vị trí, sửa được`
+              : 'Tự điền khi chọn vị trí'
+          }
           value={form.compensation.insurance_base}
-          onChange={(value) =>
-            patch('compensation', { insurance_base: digitsOnly(value) })
-          }
+          onChange={(value) => chooseInsuranceBase(digitsOnly(value))}
         />
-        <Field
-          label="Thuế TNCN khấu trừ"
-          inputMode="numeric"
-          hint="Nhập 0 nếu không khấu trừ. Hệ thống không tự suy luận miễn thuế."
-          value={form.compensation.pit_withheld}
-          onChange={(value) =>
-            patch('compensation', { pit_withheld: digitsOnly(value) })
-          }
-        />
-        <Field
-          label="Căn cứ công đoàn (bên sử dụng lao động)"
-          inputMode="numeric"
-          value={form.compensation.employer_union_base}
-          onChange={(value) =>
-            patch('compensation', { employer_union_base: digitsOnly(value) })
-          }
-        />
-        <Field
-          label="Căn cứ đoàn phí (người lao động)"
-          inputMode="numeric"
-          value={form.compensation.employee_union_base}
-          onChange={(value) =>
-            patch('compensation', { employee_union_base: digitsOnly(value) })
-          }
-        />
+
+        <div className="field field-wide">
+          <SalaryTable form={form} />
+        </div>
       </Section>
 
       <section className="card">
@@ -518,12 +489,37 @@ function ContractWorkspace({
           className="disclosure"
           onClick={() => setShowSchedule((open) => !open)}
         >
-          {showSchedule ? '▾' : '▸'} 5. Lịch làm việc, kỳ trả lương và thỏa thuận
-          trách nhiệm
+          {showSchedule ? '▾' : '▸'} 5. Khấu trừ chi tiết, lịch làm việc và kỳ
+          trả lương
           <span className="hint"> (đã điền sẵn, mở ra nếu cần sửa)</span>
         </button>
         {showSchedule && (
           <div className="grid">
+            <Field
+              label="Thuế TNCN khấu trừ"
+              inputMode="numeric"
+              hint="Nhập 0 nếu không khấu trừ. Hệ thống không tự suy luận miễn thuế."
+              value={form.compensation.pit_withheld}
+              onChange={(value) =>
+                patch('compensation', { pit_withheld: digitsOnly(value) })
+              }
+            />
+            <Field
+              label="Căn cứ công đoàn (bên sử dụng lao động)"
+              inputMode="numeric"
+              value={form.compensation.employer_union_base}
+              onChange={(value) =>
+                patch('compensation', { employer_union_base: digitsOnly(value) })
+              }
+            />
+            <Field
+              label="Căn cứ đoàn phí (người lao động)"
+              inputMode="numeric"
+              value={form.compensation.employee_union_base}
+              onChange={(value) =>
+                patch('compensation', { employee_union_base: digitsOnly(value) })
+              }
+            />
             <Field
               label="Kỳ trả lương"
               wide
@@ -608,16 +604,13 @@ function ContractWorkspace({
       </section>
 
       <section className="card">
-        <h2>6. Kiểm tra và tải về</h2>
+        <h2>6. Tạo hợp đồng</h2>
         {blocked && (
           <p className="alert warn">
             Còn thiếu: <b>{missing.join(', ')}</b>
           </p>
         )}
         <div className="toolbar">
-          <button type="button" onClick={runPreview} disabled={busy || blocked}>
-            Tính thử
-          </button>
           <button
             type="button"
             className="primary"
@@ -632,7 +625,6 @@ function ContractWorkspace({
             {status.message}
           </p>
         )}
-        {result && <CalculationTable result={result} />}
       </section>
 
       <footer className="foot">
@@ -646,41 +638,5 @@ function ContractWorkspace({
         </span>
       </footer>
     </div>
-  )
-}
-
-function CalculationTable({ result }: { result: PreviewResponse }) {
-  const rows: [string, string][] = [
-    ['Lương cơ bản', result.calculation.base_wage],
-    ['Phụ cấp vị trí', result.calculation.position_allowance],
-    ['Tổng thu nhập (Gross)', result.calculation.gross_income],
-    ['Bảo hiểm người lao động đóng', result.calculation.employee_insurance],
-    ['Đoàn phí người lao động đóng', result.calculation.employee_union],
-    ['Thuế TNCN khấu trừ', result.calculation.pit_withheld],
-    ['Thực nhận (Net)', result.calculation.net_income],
-    ['Bảo hiểm đơn vị đóng', result.calculation.employer_insurance],
-    ['Công đoàn đơn vị đóng', result.calculation.employer_union],
-    ['Tổng chi phí của đơn vị', result.calculation.employer_total_cost],
-  ]
-  return (
-    <>
-      <table className="calc">
-        <tbody>
-          {rows.map(([label, value]) => (
-            <tr
-              key={label}
-              className={label.startsWith('Thực nhận') ? 'highlight' : undefined}
-            >
-              <th>{label}</th>
-              <td>{formatMoney(value)} đ</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="hint">
-        Chính sách khấu trừ: <b>{result.policy_status}</b>. Các tỷ lệ chỉ suy ra
-        từ phụ lục mẫu, chưa xác minh cho từng đối tượng thực tế.
-      </p>
-    </>
   )
 }

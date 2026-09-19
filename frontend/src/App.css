@@ -426,3 +426,41 @@ table.ocr-table td {
   font-size: 0.78rem;
   color: var(--gold-text);
 }
+
+/* ---- Bảng lương xem trước, bố cục theo tờ phụ lục ---- */
+
+.phu-luc {
+  background: var(--card);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-top: 4px;
+}
+
+.phu-luc h3 {
+  margin: 0 0 4px;
+  font-size: 0.98rem;
+  color: var(--brand);
+}
+
+.phu-luc table.calc {
+  margin-top: 8px;
+}
+
+/* Mờ nhẹ trong lúc chờ máy chủ tính lại, để thấy số đang cập nhật. */
+.phu-luc.dang-tinh {
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+table.calc tr.tong th,
+table.calc tr.tong td {
+  font-weight: 700;
+  border-top: 2px solid var(--line);
+}
+
+/* Phần đơn vị đóng: không trừ vào thực nhận nên làm nhạt hơn. */
+table.calc tr.phu th,
+table.calc tr.phu td {
+  color: var(--muted);
+}

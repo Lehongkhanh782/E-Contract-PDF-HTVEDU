@@ -12,15 +12,24 @@ export type OcrResult = {
   recognised: string[]
   missing: string[]
   is_suggestion_only: boolean
+  source_kind: 'image' | 'pdf'
   warning: string
   raw_text: string
 }
 
 export type OcrStatus = {
   available: boolean
+  pdf: boolean
   fields: string[]
   max_bytes: number
+  max_pdf_pages: number
   note: string
+}
+
+export type SalaryResponse = {
+  demo_only: boolean
+  calculation: Calculation
+  policy_status: string
 }
 
 export type Account = {

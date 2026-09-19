@@ -92,6 +92,22 @@ def calculate(unit_id: str, payload: dict) -> dict:
     return result
 
 
+def tinh_luong(position_id: str, compensation: dict) -> dict:
+    """Tính lương mà không cần hồ sơ đầy đủ.
+
+    Dùng cho bảng lương hiện ngay khi nhân sự gõ ở mục Lương, trước khi
+    điền xong các phần khác. Vẫn đi qua đúng bộ tính của phần lõi nên
+    không có công thức thứ hai nào tồn tại song song.
+    """
+    from generate_demo import calculate_example
+
+    ket_qua = calculate_example(
+        {"job": {"position_id": position_id}, "compensation": compensation},
+        salary_policy(),
+    )
+    return {key: str(value) for key, value in ket_qua.items()}
+
+
 def build_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
     """Tạo một PDF gồm hợp đồng, phụ lục lương và thỏa thuận trách nhiệm.
 

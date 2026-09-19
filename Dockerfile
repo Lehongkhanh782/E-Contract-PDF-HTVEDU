@@ -20,6 +20,8 @@ FROM python:3.11-slim
 # fonts-dejavu-core cung cấp font cho dòng đánh dấu bản thử nghiệm.
 # fonts-liberation thay cho các font Microsoft để giữ bố cục mẫu Word.
 # tesseract-ocr-vie là gói tiếng Việt; thiếu nó thì đọc ảnh sai dấu nặng.
+# poppler-utils để đọc bản scan PDF: pdftotext lấy lớp chữ sẵn có,
+# pdftoppm dựng ảnh khi PDF không có lớp chữ.
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
         libreoffice-writer \
@@ -27,6 +29,7 @@ RUN apt-get update \
         fonts-liberation \
         tesseract-ocr \
         tesseract-ocr-vie \
+        poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

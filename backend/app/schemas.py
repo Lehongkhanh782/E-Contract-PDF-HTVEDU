@@ -110,6 +110,16 @@ class ContractRequest(Strict):
         return payload
 
 
+class SalaryRequest(Strict):
+    """Chỉ những gì cần để tính lương, không đòi hồ sơ đầy đủ."""
+
+    position_id: Text
+    compensation: Compensation
+
+    def to_kit_payload(self) -> dict:
+        return self.compensation.model_dump(mode="json")
+
+
 class CalculationResponse(BaseModel):
     demo_only: bool
     unit_id: str

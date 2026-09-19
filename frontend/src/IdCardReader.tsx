@@ -27,13 +27,17 @@ export default function IdCardReader({
   disabled?: boolean
 }) {
   const [coTheDoc, setCoTheDoc] = useState<boolean | null>(null)
+  const [nhanPdf, setNhanPdf] = useState(false)
   const [trangThai, setTrangThai] = useState<Trang_thai>({ kind: 'idle' })
   const [ketQua, setKetQua] = useState<OcrResult | null>(null)
   const oChonTep = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchOcrStatus()
-      .then((s) => setCoTheDoc(s.available))
+      .then((s) => {
+        setCoTheDoc(s.available)
+        setNhanPdf(s.pdf)
+      })
       .catch(() => setCoTheDoc(false))
   }, [])
 
@@ -82,7 +86,11 @@ export default function IdCardReader({
           onClick={() => oChonTep.current?.click()}
           disabled={disabled || dangBan || coTheDoc === null}
         >
-          {dangBan ? 'Đang đọc…' : 'Tải ảnh giấy tờ để điền nhanh'}
+          {dangBan
+            ? 'Đang đọc…'
+            : nhanPdf
+              ? 'Tải ảnh hoặc PDF giấy tờ để điền nhanh'
+              : 'Tải ảnh giấy tờ để điền nhanh'}
         </button>
         {ketQua && (
           <button
@@ -98,7 +106,11 @@ export default function IdCardReader({
       <input
         ref={oChonTep}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept={
+          nhanPdf
+            ? 'image/jpeg,image/png,image/webp,application/pdf'
+            : 'image/jpeg,image/png,image/webp'
+        }
         hidden
         onChange={(e) => {
           const file = e.target.files?.[0]
@@ -109,8 +121,10 @@ export default function IdCardReader({
       />
 
       <p className="hint">
-        Nhận ảnh JPG, PNG hoặc WebP. Ảnh chỉ được đọc rồi xóa, không lưu lại
-        trên máy chủ.
+        {nhanPdf
+          ? 'Nhận ảnh JPG, PNG, WebP và tệp PDF đã quét (tối đa 3 trang). '
+          : 'Nhận ảnh JPG, PNG hoặc WebP. '}
+        Tệp chỉ được đọc rồi xóa, không lưu lại trên máy chủ.
       </p>
 
       {trangThai.message && trangThai.kind === 'error' && (
@@ -137,7 +151,8 @@ export default function IdCardReader({
             </tbody>
           </table>
           <p className="hint">
-            Đọc được {ketQua.recognised.length}/6 ô. Các ô đọc được đã điền
+            Đọc được {ketQua.recognised.length}/6 ô
+            {ketQua.source_kind === 'pdf' ? ' từ tệp PDF' : ' từ ảnh'}. Các ô đọc được đã điền
             sẵn bên dưới, bạn sửa lại cho đúng rồi mới tạo hợp đồng.
           </p>
         </>

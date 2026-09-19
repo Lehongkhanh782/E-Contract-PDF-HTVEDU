@@ -5,6 +5,7 @@ import type {
   OcrStatus,
   Position,
   PreviewResponse,
+  SalaryResponse,
   Unit,
 } from './types'
 
@@ -94,6 +95,23 @@ export function fetchPositions() {
   return getJson<{ positions: Position[]; deduction_policy_status: string }>(
     '/api/positions',
   )
+}
+
+/** Tính lương ngay khi đang gõ; chỉ cần vị trí và khối lương. */
+export async function calcSalary(
+  positionId: string,
+  compensation: ContractForm['compensation'],
+  signal?: AbortSignal,
+): Promise<SalaryResponse> {
+  const response = await fetch('/api/salary', {
+    ...WITH_SESSION,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ position_id: positionId, compensation }),
+    signal,
+  })
+  if (!response.ok) fail(response, await readError(response))
+  return response.json()
 }
 
 export async function preview(form: ContractForm): Promise<PreviewResponse> {

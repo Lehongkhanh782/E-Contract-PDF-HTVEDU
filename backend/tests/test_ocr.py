@@ -14,6 +14,19 @@ from tests import logged_in_client
 client = logged_in_client()
 
 CO_TESSERACT = ocr.san_sang()
+CO_PDF = ocr.ho_tro_pdf()
+
+
+def the_gia_pdf(**kwargs) -> bytes:
+    """Bản scan PDF chỉ có ảnh, không có lớp chữ, giống máy quét thật."""
+    import io
+
+    from PIL import Image
+
+    anh = Image.open(io.BytesIO(ve_the_gia(**kwargs))).convert("RGB")
+    bo_nho = io.BytesIO()
+    anh.save(bo_nho, format="PDF", resolution=150)
+    return bo_nho.getvalue()
 
 
 def ve_the_gia(ten="NGUYỄN THỊ MINH AN", so="079199000123") -> bytes:
@@ -115,6 +128,57 @@ class TestKiemTraAnh(unittest.TestCase):
         ocr._kiem_tra_anh(ve_the_gia())
 
 
+class TestNhanDienPdf(unittest.TestCase):
+    def test_nhan_ra_pdf_qua_dau_hieu_dau_tep(self):
+        self.assertTrue(ocr.la_pdf(b"%PDF-1.7 ..."))
+        self.assertFalse(ocr.la_pdf(b"\x89PNG\r\n"))
+        self.assertFalse(ocr.la_pdf(b""))
+
+    def test_tu_choi_pdf_hong(self):
+        with self.assertRaises(ocr.AnhKhongHopLe):
+            ocr._kiem_tra_pdf(b"%PDF-1.7 nhung khong phai pdf that")
+
+    @unittest.skipUnless(CO_PDF, "Máy chưa cài poppler-utils")
+    def test_pdf_mot_trang_duoc_chap_nhan(self):
+        self.assertEqual(ocr._kiem_tra_pdf(the_gia_pdf()), 1)
+
+    @unittest.skipUnless(CO_PDF, "Máy chưa cài poppler-utils")
+    def test_tu_choi_pdf_qua_nhieu_trang(self):
+        import io
+
+        from PIL import Image
+
+        trang = Image.open(io.BytesIO(ve_the_gia())).convert("RGB")
+        bo_nho = io.BytesIO()
+        trang.save(bo_nho, format="PDF", save_all=True,
+                   append_images=[trang] * ocr.SO_TRANG_TOI_DA)
+        with self.assertRaises(ocr.AnhKhongHopLe) as bat:
+            ocr._kiem_tra_pdf(bo_nho.getvalue())
+        self.assertIn("trang", str(bat.exception))
+
+
+class TestBoNhieu(unittest.TestCase):
+    """Máy quét hay thêm gạch hoặc chấm thừa sau nhãn."""
+
+    def test_bo_gach_thua_sau_dau_hai_cham(self):
+        van_ban = (
+            "Nơi thường trú / Place of residence: -\n"
+            "02-04 Đường số 34, Phường An Lạc\n"
+        )
+        truong = ocr.tach_truong(van_ban)
+        self.assertEqual(
+            truong["permanent_address"], "02-04 Đường số 34, Phường An Lạc"
+        )
+
+    def test_chi_co_nhieu_thi_coi_nhu_trong(self):
+        for xau in (" - ", "...", " | ", "~", ""):
+            with self.subTest(xau=xau):
+                self.assertEqual(ocr._bo_nhieu(xau), "")
+
+    def test_giu_nguyen_noi_dung_that(self):
+        self.assertEqual(ocr._bo_nhieu("  Việt Nam  "), "Việt Nam")
+
+
 class TestApi(unittest.TestCase):
     def test_chua_dang_nhap_thi_bi_chan(self):
         from fastapi.testclient import TestClient
@@ -128,7 +192,9 @@ class TestApi(unittest.TestCase):
     def test_status_bao_dung_tinh_trang(self):
         body = client.get("/api/ocr/status").json()
         self.assertEqual(body["available"], CO_TESSERACT)
+        self.assertEqual(body["pdf"], CO_PDF)
         self.assertEqual(body["fields"], ocr.TRUONG)
+        self.assertEqual(body["max_pdf_pages"], ocr.SO_TRANG_TOI_DA)
 
     def test_tep_khong_phai_anh_bi_tu_choi(self):
         phan_hoi = client.post(
@@ -155,6 +221,29 @@ class TestApi(unittest.TestCase):
         ).json()
         self.assertTrue(body["is_suggestion_only"])
         self.assertIn("gợi ý", body["warning"])
+
+
+    @unittest.skipUnless(CO_TESSERACT and CO_PDF, "Thiếu Tesseract hoặc poppler")
+    def test_doc_duoc_ban_scan_pdf(self):
+        """Bản scan PDF không có lớp chữ vẫn phải đọc được."""
+        phan_hoi = client.post(
+            "/api/ocr",
+            files={"anh": ("scan.pdf", the_gia_pdf(), "application/pdf")},
+        )
+        self.assertEqual(phan_hoi.status_code, 200, phan_hoi.text)
+        body = phan_hoi.json()
+        self.assertEqual(body["source_kind"], "pdf")
+        self.assertEqual(body["fields"]["identity_number"], "079199000123")
+        self.assertEqual(body["fields"]["gender"], "Nữ")
+        self.assertEqual(body["fields"]["birth_date"], "1999-01-01")
+
+    @unittest.skipUnless(CO_TESSERACT and CO_PDF, "Thiếu Tesseract hoặc poppler")
+    def test_pdf_van_kem_canh_bao_chi_la_goi_y(self):
+        body = client.post(
+            "/api/ocr",
+            files={"anh": ("scan.pdf", the_gia_pdf(), "application/pdf")},
+        ).json()
+        self.assertTrue(body["is_suggestion_only"])
 
 
 if __name__ == "__main__":

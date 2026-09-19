@@ -74,6 +74,74 @@ class TestPreview(unittest.TestCase):
         self.assertTrue(body["demo_only"])
 
 
+class TestTinhLuongNhanh(unittest.TestCase):
+    """Cổng /api/salary cho bảng lương hiện ngay khi đang gõ."""
+
+    def khoi(self, **doi) -> dict:
+        d = sample_request()
+        d["compensation"].update(doi)
+        return {"position_id": d["job"]["position_id"],
+                "compensation": d["compensation"]}
+
+    def test_khop_ket_qua_cua_hop_dong_day_du(self):
+        """Bảng xem trước và bản in phải ra cùng một con số."""
+        nhanh = client.post("/api/salary", json=self.khoi()).json()
+        day_du = client.post("/api/preview", json=sample_request()).json()
+        self.assertEqual(nhanh["calculation"], day_du["calculation"])
+
+    def test_khong_doi_ho_so_day_du(self):
+        response = client.post("/api/salary", json=self.khoi())
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["calculation"]["net_income"], "5389350")
+
+    def test_doi_so_tien_thi_doi_ket_qua(self):
+        a = client.post("/api/salary", json=self.khoi()).json()
+        b = client.post("/api/salary",
+                        json=self.khoi(salary_amount="8000000")).json()
+        self.assertNotEqual(a["calculation"]["net_income"],
+                            b["calculation"]["net_income"])
+        self.assertEqual(b["calculation"]["gross_income"], "8000000")
+
+    def test_chieu_net_tim_duoc_gross(self):
+        body = client.post(
+            "/api/salary",
+            json=self.khoi(salary_mode="net", salary_amount="6000000"),
+        ).json()
+        self.assertEqual(body["calculation"]["gross_income"], "6610650")
+
+    def test_doi_vi_tri_thi_doi_luong_co_ban(self):
+        goi = self.khoi(salary_amount="9000000", insurance_base="7000000",
+                        employer_union_base="7000000",
+                        employee_union_base="7000000")
+        goi["position_id"] = "principal"
+        body = client.post("/api/salary", json=goi).json()
+        self.assertEqual(body["calculation"]["base_wage"], "7000000")
+
+    def test_vi_tri_khong_co_thi_bi_tu_choi(self):
+        goi = self.khoi()
+        goi["position_id"] = "khong_ton_tai"
+        self.assertEqual(client.post("/api/salary", json=goi).status_code, 400)
+
+    def test_gross_thap_hon_luong_co_ban_bi_tu_choi(self):
+        goi = self.khoi(salary_amount="1000000")
+        self.assertEqual(client.post("/api/salary", json=goi).status_code, 400)
+
+    def test_thieu_can_cu_bao_hiem_bi_tu_choi(self):
+        goi = self.khoi()
+        goi["compensation"].pop("insurance_base")
+        self.assertEqual(client.post("/api/salary", json=goi).status_code, 422)
+
+    def test_chua_dang_nhap_thi_bi_chan(self):
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        khach = TestClient(app)
+        self.assertEqual(
+            khach.post("/api/salary", json=self.khoi()).status_code, 401
+        )
+
+
 class TestInputRules(unittest.TestCase):
     def test_unknown_unit_is_rejected(self):
         payload = sample_request()

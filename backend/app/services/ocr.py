@@ -28,6 +28,13 @@ _cong_ocr = threading.BoundedSemaphore(2)
 
 DINH_DANG_CHO_PHEP = {"JPEG", "PNG", "WEBP"}
 
+# Bản scan căn cước thường một hoặc hai mặt; chặn tệp nhiều trang.
+SO_TRANG_TOI_DA = 3
+# 300 điểm/inch là mức Tesseract đọc tốt mà chưa tốn nhiều bộ nhớ.
+DO_PHAN_GIAI = 300
+# Bản scan đã được máy quét nhận chữ sẵn thì dùng luôn, khỏi đọc lại ảnh.
+DU_CHU_DE_DUNG_LUON = 60
+
 # Nhãn trên thẻ căn cước. Mỗi nhãn kèm tên trường trong biểu mẫu.
 NHAN = [
     ("identity_number", r"(?:số|so)\s*/?\s*(?:no\.?)?\s*:"),
@@ -47,7 +54,21 @@ class OcrKhongSanSang(RuntimeError):
 
 
 class AnhKhongHopLe(ValueError):
-    """Tệp gửi lên không phải ảnh đọc được."""
+    """Tệp gửi lên không phải ảnh hoặc PDF đọc được."""
+
+
+def la_pdf(du_lieu: bytes) -> bool:
+    """Nhận diện PDF bằng dấu hiệu đầu tệp, không tin phần mở rộng."""
+    return du_lieu[:5] == b"%PDF-"
+
+
+def _poppler(ten: str) -> str:
+    duong_dan = shutil.which(ten)
+    if not duong_dan:
+        raise OcrKhongSanSang(
+            f"Máy chủ chưa cài {ten}. Cài gói poppler-utils để đọc được PDF."
+        )
+    return duong_dan
 
 
 def _tesseract() -> str:
@@ -86,14 +107,95 @@ def _kiem_tra_anh(du_lieu: bytes) -> None:
 
     if dinh_dang not in DINH_DANG_CHO_PHEP:
         raise AnhKhongHopLe(
-            f"Chỉ nhận ảnh JPG, PNG hoặc WebP; tệp này là {dinh_dang or 'không rõ'}"
+            f"Chỉ nhận ảnh JPG, PNG, WebP hoặc tệp PDF; "
+            f"tệp này là {dinh_dang or 'không rõ'}"
         )
     if rong > KICH_THUOC_TOI_DA[0] or cao > KICH_THUOC_TOI_DA[1]:
         raise AnhKhongHopLe("Ảnh có kích thước quá lớn")
 
 
+def _kiem_tra_pdf(du_lieu: bytes) -> int:
+    """Xác nhận PDF đọc được và trả về số trang."""
+    if len(du_lieu) > GIOI_HAN_BYTE:
+        raise AnhKhongHopLe(
+            f"Tệp lớn hơn {GIOI_HAN_BYTE // (1024 * 1024)} MB; "
+            "quét lại với độ phân giải thấp hơn"
+        )
+    try:
+        import io
+
+        from pypdf import PdfReader
+
+        so_trang = len(PdfReader(io.BytesIO(du_lieu)).pages)
+    except Exception as loi:
+        raise AnhKhongHopLe("Không mở được tệp này như một PDF") from loi
+    if so_trang == 0:
+        raise AnhKhongHopLe("PDF không có trang nào")
+    if so_trang > SO_TRANG_TOI_DA:
+        raise AnhKhongHopLe(
+            f"PDF có {so_trang} trang; chỉ nhận tối đa {SO_TRANG_TOI_DA} trang. "
+            "Tách riêng trang chứa giấy tờ rồi tải lại."
+        )
+    return so_trang
+
+
+def _chu_co_san_trong_pdf(duong_dan: Path) -> str:
+    """Lấy lớp chữ sẵn có, nếu máy quét đã nhận dạng chữ từ trước."""
+    ket_qua = subprocess.run(
+        [_poppler("pdftotext"), "-layout", str(duong_dan), "-"],
+        capture_output=True, text=True, timeout=THOI_GIAN_TOI_DA,
+    )
+    return ket_qua.stdout if ket_qua.returncode == 0 else ""
+
+
+def _doc_pdf(du_lieu: bytes) -> str:
+    """Đọc PDF: ưu tiên lớp chữ sẵn có, không có thì dựng ảnh rồi nhận dạng."""
+    _kiem_tra_pdf(du_lieu)
+    tesseract = _tesseract()
+    pdftoppm = _poppler("pdftoppm")
+
+    with tempfile.TemporaryDirectory(prefix="econtract_pdf_") as thu_muc:
+        goc = Path(thu_muc) / "nguon.pdf"
+        goc.write_bytes(du_lieu)
+
+        san_co = _chu_co_san_trong_pdf(goc)
+        if len(san_co.strip()) >= DU_CHU_DE_DUNG_LUON:
+            return san_co
+
+        # Không có lớp chữ: dựng từng trang thành ảnh rồi nhận dạng.
+        subprocess.run(
+            [pdftoppm, "-r", str(DO_PHAN_GIAI), "-png",
+             "-l", str(SO_TRANG_TOI_DA), str(goc), str(Path(thu_muc) / "trang")],
+            capture_output=True, timeout=THOI_GIAN_TOI_DA * 2, check=True,
+        )
+        anh = sorted(Path(thu_muc).glob("trang*.png"))
+        if not anh:
+            raise RuntimeError("Không dựng được ảnh từ PDF này")
+
+        phan = []
+        for i, tep in enumerate(anh):
+            ket_qua = subprocess.run(
+                [tesseract, str(tep), str(Path(thu_muc) / f"ra{i}"), "-l", "vie"],
+                capture_output=True, text=True, timeout=THOI_GIAN_TOI_DA,
+            )
+            ra = Path(thu_muc) / f"ra{i}.txt"
+            if ket_qua.returncode == 0 and ra.is_file():
+                phan.append(ra.read_text(encoding="utf-8", errors="replace"))
+        if not phan:
+            raise RuntimeError("Tesseract không đọc được trang nào trong PDF")
+        return "\n".join(phan)
+
+
 def doc_van_ban(du_lieu: bytes) -> str:
-    """Chạy Tesseract và trả về văn bản thô."""
+    """Đọc ảnh hoặc PDF và trả về văn bản thô."""
+    if la_pdf(du_lieu):
+        if not _cong_ocr.acquire(timeout=THOI_GIAN_TOI_DA):
+            raise RuntimeError("Máy chủ đang bận đọc tệp khác. Chờ một lát rồi thử lại.")
+        try:
+            return _doc_pdf(du_lieu)
+        finally:
+            _cong_ocr.release()
+
     _kiem_tra_anh(du_lieu)
     lenh = _tesseract()
 
@@ -166,6 +268,17 @@ CHUAN_HOA = {
 }
 
 
+# Ký tự máy quét hay thêm vào quanh nhãn, không phải nội dung thật.
+NHIEU = r"[\s:.\-–—_|~·•]+"
+
+
+def _bo_nhieu(doan: str) -> str:
+    """Bỏ nhiễu hai đầu; còn lại dưới hai ký tự thì coi như không có gì."""
+    sach = re.sub(rf"^{NHIEU}", "", doan)
+    sach = re.sub(rf"{NHIEU}$", "", sach).strip()
+    return sach if len(sach) >= 2 else ""
+
+
 def tach_truong(van_ban: str) -> dict[str, str | None]:
     """Tách các trường từ văn bản thô. Không chắc thì trả None."""
     dong = [d.strip() for d in van_ban.splitlines()]
@@ -181,12 +294,14 @@ def tach_truong(van_ban: str) -> dict[str, str | None]:
             if not khop:
                 continue
             # Giá trị nằm ngay sau dấu hai chấm, hoặc ở dòng có chữ kế tiếp.
-            phan_sau = hien_tai[khop.end():].strip()
-            ung_vien = phan_sau
+            # Máy quét hay thêm gạch hoặc chấm thừa sau nhãn, ví dụ
+            # "Place of residence: -", nên phải bỏ nhiễu trước khi xét.
+            ung_vien = _bo_nhieu(hien_tai[khop.end():])
             if not ung_vien:
                 for tiep in dong[i + 1:]:
-                    if tiep:
-                        ung_vien = tiep
+                    sach = _bo_nhieu(tiep)
+                    if sach:
+                        ung_vien = sach
                         break
             if ung_vien:
                 ket_qua[ten] = CHUAN_HOA[ten](ung_vien)
@@ -196,7 +311,7 @@ def tach_truong(van_ban: str) -> dict[str, str | None]:
 
 
 def doc_giay_to(du_lieu: bytes) -> dict:
-    """Đọc ảnh và trả về các trường gợi ý kèm cảnh báo bắt buộc."""
+    """Đọc ảnh hoặc PDF và trả về các trường gợi ý kèm cảnh báo bắt buộc."""
     van_ban = doc_van_ban(du_lieu)
     truong = tach_truong(van_ban)
     doc_duoc = [ten for ten, gia_tri in truong.items() if gia_tri]
@@ -205,12 +320,18 @@ def doc_giay_to(du_lieu: bytes) -> dict:
         "recognised": doc_duoc,
         "missing": [ten for ten in TRUONG if ten not in doc_duoc],
         "is_suggestion_only": True,
+        "source_kind": "pdf" if la_pdf(du_lieu) else "image",
         "warning": (
             "Đây chỉ là gợi ý do máy đọc. Máy thường nhầm dấu tiếng Việt, "
             "nhất là ở họ tên. Đọc lại từng ô trước khi tạo hợp đồng."
         ),
         "raw_text": van_ban.strip(),
     }
+
+
+def ho_tro_pdf() -> bool:
+    """Máy chủ có công cụ đọc PDF không."""
+    return all(shutil.which(t) for t in ("pdftoppm", "pdftotext"))
 
 
 def san_sang() -> bool:

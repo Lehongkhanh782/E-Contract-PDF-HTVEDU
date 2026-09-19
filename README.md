@@ -60,7 +60,8 @@ Bản đồ 51 biến và các điểm cần chốt xem `contract_kit/Ban_do_tru
 - LibreOffice **kèm gói Writer** (`libreoffice-writer`) — thiếu gói này sẽ
   báo lỗi `Không chuyển được Word sang PDF`
 - Tesseract kèm gói tiếng Việt (`tesseract-ocr`, `tesseract-ocr-vie`) nếu
-  muốn dùng chức năng đọc ảnh giấy tờ; thiếu thì phần đó tự ẩn đi
+  muốn dùng chức năng đọc giấy tờ; thiếu thì phần đó tự ẩn đi
+- `poppler-utils` để đọc được bản scan PDF; thiếu thì chỉ nhận ảnh
 - Font hỗ trợ tiếng Việt, nên cài đúng các font mà mẫu Word đang dùng
 
 ## Tài khoản
@@ -127,10 +128,11 @@ cd frontend && npm run build && cd ..
 | GET | `/api/units` | 4 đơn vị đã cấu hình |
 | GET | `/api/positions` | 5 vị trí và mức lương cơ bản |
 | GET | `/api/defaults` | Giá trị gợi ý cho các ô dài |
-| POST | `/api/preview` | Tính lương, không tạo file |
+| POST | `/api/salary` | Tính lương chỉ từ vị trí và khối lương, cho bảng xem trước |
+| POST | `/api/preview` | Tính lương từ hồ sơ đầy đủ |
 | POST | `/api/generate` | Trả về PDF |
 | GET | `/api/ocr/status` | Máy chủ có đọc được ảnh không |
-| POST | `/api/ocr` | Đọc ảnh giấy tờ, trả về các trường gợi ý |
+| POST | `/api/ocr` | Đọc ảnh hoặc PDF giấy tờ, trả về các trường gợi ý |
 
 Trừ `/api/health`, mọi endpoint đều yêu cầu đăng nhập. Phạm vi cơ sở được
 kiểm tra lại ở máy chủ, không tin mã đơn vị mà trình duyệt gửi lên.
@@ -214,7 +216,9 @@ Phần chưa làm, theo thứ tự ưu tiên trong đặc tả:
 2. Luồng phát hành chính thức: đánh số, snapshot, chống phát hành trùng
 3. Ghi lại lịch sử thao tác của từng tài khoản
 
-Về chức năng đọc ảnh giấy tờ: dùng Tesseract chạy ngay trên máy chủ nên
+Về chức năng đọc giấy tờ: nhận cả ảnh và bản scan PDF tối đa 3 trang. PDF
+có lớp chữ sẵn thì dùng luôn, không có thì dựng ảnh ở 300 điểm/inch rồi
+nhận dạng. Dùng Tesseract chạy ngay trên máy chủ nên
 không tốn phí và ảnh không rời khỏi hệ thống. Đo thử trên ảnh sạch do máy
 vẽ: đọc đúng 6/7 trường, chiếm 39 MB, mất 0,4 giây. Trường đọc sai lại là
 họ tên, do nhầm dấu ngã thành dấu mũ. Vì vậy kết quả chỉ được dùng để điền
