@@ -7,7 +7,7 @@ import tempfile
 import unicodedata
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 
@@ -15,7 +15,7 @@ from app import config
 from app.auth import User
 from app.deps import current_user, require_unit
 from app.schemas import ContractRequest
-from app.services import documents
+from app.services import documents, ocr
 
 router = APIRouter(prefix="/api")
 
@@ -90,6 +90,51 @@ def form_defaults(_: User = Depends(current_user)) -> dict:
         },
         "status": "example_values_pending_review",
     }
+
+
+@router.get("/ocr/status")
+def ocr_status(_: User = Depends(current_user)) -> dict:
+    """Máy chủ có đọc được ảnh giấy tờ không."""
+    return {
+        "available": ocr.san_sang(),
+        "fields": ocr.TRUONG,
+        "max_bytes": ocr.GIOI_HAN_BYTE,
+        "note": (
+            "Kết quả chỉ là gợi ý để điền nhanh. Nhân sự phải đọc lại từng ô."
+        ),
+    }
+
+
+@router.post("/ocr")
+async def ocr_giay_to(
+    anh: UploadFile = File(...),
+    _: User = Depends(current_user),
+) -> JSONResponse:
+    """Đọc ảnh giấy tờ tùy thân và trả về các trường gợi ý.
+
+    Ảnh chỉ nằm trong bộ nhớ và thư mục tạm, không được lưu lại.
+    """
+    # Đọc có giới hạn: không nạp cả tệp khổng lồ vào bộ nhớ rồi mới từ chối.
+    du_lieu = await anh.read(ocr.GIOI_HAN_BYTE + 1)
+    if len(du_lieu) > ocr.GIOI_HAN_BYTE:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Ảnh lớn hơn {ocr.GIOI_HAN_BYTE // (1024 * 1024)} MB. "
+                "Chụp lại hoặc giảm kích thước."
+            ),
+        )
+
+    try:
+        ket_qua = ocr.doc_giay_to(du_lieu)
+    except ocr.AnhKhongHopLe as loi:
+        raise HTTPException(status_code=400, detail=str(loi)) from loi
+    except ocr.OcrKhongSanSang as loi:
+        raise HTTPException(status_code=503, detail=str(loi)) from loi
+    except RuntimeError as loi:
+        raise HTTPException(status_code=503, detail=str(loi)) from loi
+
+    return JSONResponse(ket_qua)
 
 
 @router.post("/preview")

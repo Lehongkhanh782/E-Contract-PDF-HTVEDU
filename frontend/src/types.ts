@@ -1,3 +1,28 @@
+export type OcrFields = {
+  identity_number: string | null
+  full_name: string | null
+  birth_date: string | null
+  gender: string | null
+  nationality: string | null
+  permanent_address: string | null
+}
+
+export type OcrResult = {
+  fields: OcrFields
+  recognised: string[]
+  missing: string[]
+  is_suggestion_only: boolean
+  warning: string
+  raw_text: string
+}
+
+export type OcrStatus = {
+  available: boolean
+  fields: string[]
+  max_bytes: number
+  note: string
+}
+
 export type Account = {
   username: string
   display_name: string

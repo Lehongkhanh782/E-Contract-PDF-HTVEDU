@@ -7,8 +7,9 @@ cho 4 đơn vị: Vườn Sáng Tạo, Victoria, Gấu Panda, Đại Dương Xan
 
 Repo đang ở **giai đoạn 2**: đã có website nhập liệu tiếng Việt chạy được
 trên máy tính và điện thoại, có đăng nhập và phân quyền theo cơ sở, tạo ra
-PDF thử nghiệm, và đã đóng gói sẵn để đưa lên mạng.
-Chưa có database lưu hồ sơ, OCR hay chức năng phát hành chính thức.
+PDF thử nghiệm, đọc được ảnh giấy tờ để điền nhanh, và đã đóng gói sẵn để
+đưa lên mạng.
+Chưa có database lưu hồ sơ và chưa có chức năng phát hành chính thức.
 
 Mọi PDF do chương trình tạo ra đều mang dòng
 `BẢN THỬ NGHIỆM DỮ LIỆU GIẢ CHƯA DÙNG KÝ` và **không dùng để ký thật**.
@@ -35,6 +36,8 @@ Bản đồ 51 biến và các điểm cần chốt xem `contract_kit/Ban_do_tru
 - Python 3.11 trở lên
 - LibreOffice **kèm gói Writer** (`libreoffice-writer`) — thiếu gói này sẽ
   báo lỗi `Không chuyển được Word sang PDF`
+- Tesseract kèm gói tiếng Việt (`tesseract-ocr`, `tesseract-ocr-vie`) nếu
+  muốn dùng chức năng đọc ảnh giấy tờ; thiếu thì phần đó tự ẩn đi
 - Font hỗ trợ tiếng Việt, nên cài đúng các font mà mẫu Word đang dùng
 
 ## Tài khoản
@@ -103,6 +106,8 @@ cd frontend && npm run build && cd ..
 | GET | `/api/defaults` | Giá trị gợi ý cho các ô dài |
 | POST | `/api/preview` | Tính lương, không tạo file |
 | POST | `/api/generate` | Trả về PDF |
+| GET | `/api/ocr/status` | Máy chủ có đọc được ảnh không |
+| POST | `/api/ocr` | Đọc ảnh giấy tờ, trả về các trường gợi ý |
 
 Trừ `/api/health`, mọi endpoint đều yêu cầu đăng nhập. Phạm vi cơ sở được
 kiểm tra lại ở máy chủ, không tin mã đơn vị mà trình duyệt gửi lên.
@@ -183,9 +188,14 @@ Xem mục 18 (lộ trình) và mục 22 (những thông tin còn cần chốt) t
 Phần chưa làm, theo thứ tự ưu tiên trong đặc tả:
 
 1. Database lưu hồ sơ nhân viên, không phải nhập lại mỗi lần
-2. Đọc ảnh giấy tờ bằng OCR để giảm thao tác nhập
-3. Luồng phát hành chính thức: đánh số, snapshot, chống phát hành trùng
-4. Ghi lại lịch sử thao tác của từng tài khoản
+2. Luồng phát hành chính thức: đánh số, snapshot, chống phát hành trùng
+3. Ghi lại lịch sử thao tác của từng tài khoản
+
+Về chức năng đọc ảnh giấy tờ: dùng Tesseract chạy ngay trên máy chủ nên
+không tốn phí và ảnh không rời khỏi hệ thống. Đo thử trên ảnh sạch do máy
+vẽ: đọc đúng 6/7 trường, chiếm 39 MB, mất 0,4 giây. Trường đọc sai lại là
+họ tên, do nhầm dấu ngã thành dấu mũ. Vì vậy kết quả chỉ được dùng để điền
+sẵn cho nhân sự sửa, không bao giờ được coi là dữ liệu chắc chắn.
 
 Trước khi dùng cho hồ sơ thật còn phải chốt công thức bảo hiểm/thuế áp dụng
 thực tế và rà soát điều khoản theo từng đơn vị và chức danh.

@@ -1,6 +1,8 @@
 import type {
   Account,
   ContractForm,
+  OcrResult,
+  OcrStatus,
   Position,
   PreviewResponse,
   Unit,
@@ -47,6 +49,23 @@ async function getJson<T>(path: string): Promise<T> {
 
 export function fetchMe() {
   return getJson<Account>('/api/me')
+}
+
+export function fetchOcrStatus() {
+  return getJson<OcrStatus>('/api/ocr/status')
+}
+
+/** Gửi ảnh giấy tờ lên để máy đọc thử. Kết quả chỉ là gợi ý. */
+export async function readIdCard(file: File): Promise<OcrResult> {
+  const form = new FormData()
+  form.append('anh', file)
+  const response = await fetch('/api/ocr', {
+    ...WITH_SESSION,
+    method: 'POST',
+    body: form,
+  })
+  if (!response.ok) fail(response, await readError(response))
+  return response.json()
 }
 
 export async function login(

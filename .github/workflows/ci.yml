@@ -17,6 +17,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Cài Tesseract để kiểm thử phần đọc ảnh
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            tesseract-ocr tesseract-ocr-vie fonts-dejavu-core
+
       - name: Cài thư viện
         run: pip install -r backend/requirements.txt
 

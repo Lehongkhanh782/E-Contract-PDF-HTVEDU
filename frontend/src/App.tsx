@@ -11,6 +11,7 @@ import {
 } from './api'
 import { Field, Section, Select, TextArea } from './components'
 import { demoForm, digitsOnly, emptyForm, formatMoney } from './defaults'
+import IdCardReader from './IdCardReader'
 import LoginScreen from './LoginScreen'
 import type { Account, ContractForm, Position, PreviewResponse, Unit } from './types'
 import './App.css'
@@ -321,7 +322,14 @@ function ContractWorkspace({
         )}
       </Section>
 
-      <Section title="2. Thông tin người lao động">
+      <Section
+        title="2. Thông tin người lao động"
+        hint="Có thể tải ảnh giấy tờ lên để máy điền sẵn, nhưng máy hay nhầm dấu tiếng Việt nên phải đọc lại từng ô."
+      >
+        <IdCardReader
+          disabled={busy}
+          onFilled={(fields) => patch('employee', fields)}
+        />
         <Field
           label="Họ và tên"
           required
@@ -627,8 +635,10 @@ function ContractWorkspace({
       </section>
 
       <footer className="foot">
-        Chưa có đăng nhập, lưu trữ hồ sơ, đọc ảnh giấy tờ hay đánh số hợp đồng
-        chính thức. Không nhập dữ liệu thật của nhân viên vào bản thử nghiệm này.
+        Bản thử nghiệm. Chưa có lưu trữ hồ sơ nhân viên và chưa có luồng phát
+        hành chính thức, nên mỗi lần tạo hợp đồng đều phải nhập lại từ đầu và
+        PDF chưa dùng để ký. Công thức bảo hiểm, công đoàn và thuế vẫn là
+        chính sách minh họa, chưa được kế toán xác nhận.
       </footer>
     </div>
   )

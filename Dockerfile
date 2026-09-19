@@ -19,11 +19,14 @@ FROM python:3.11-slim
 # chương trình báo "Không chuyển được Word sang PDF".
 # fonts-dejavu-core cung cấp font cho dòng đánh dấu bản thử nghiệm.
 # fonts-liberation thay cho các font Microsoft để giữ bố cục mẫu Word.
+# tesseract-ocr-vie là gói tiếng Việt; thiếu nó thì đọc ảnh sai dấu nặng.
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
         libreoffice-writer \
         fonts-dejavu-core \
         fonts-liberation \
+        tesseract-ocr \
+        tesseract-ocr-vie \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

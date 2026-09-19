@@ -315,3 +315,22 @@ button.small {
   min-height: 0;
   font-size: 0.85rem;
 }
+
+/* ---- Khung đọc ảnh giấy tờ ---- */
+
+.ocr-box {
+  background: var(--bg);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.ocr-box .toolbar {
+  margin-top: 0;
+}
+
+table.ocr-table td {
+  text-align: left;
+  white-space: normal;
+  font-variant-numeric: normal;
+}
