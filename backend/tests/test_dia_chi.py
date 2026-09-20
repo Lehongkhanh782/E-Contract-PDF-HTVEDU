@@ -1,8 +1,8 @@
 """Kiểm thử viết đầy đủ địa chỉ.
 
-Nguyên tắc: chỉ mở rộng chữ viết tắt và sửa cách viết hoa. Không thêm
-thông tin người dùng chưa gõ, không bỏ bớt phần nào, và không đổi tên
-phường xã theo đợt sáp nhập.
+Tách cấp hành chính, mở rộng chữ viết tắt và đối chiếu danh mục hiện hành.
+Thiếu tỉnh/thành thì ưu tiên TP.HCM khi phường/xã khớp; tỉnh đã ghi rõ
+được giữ làm căn cứ. Trường hợp không xác định được phải nhắc kiểm tra.
 """
 from __future__ import annotations
 
@@ -53,7 +53,8 @@ class TestVietDayDu(unittest.TestCase):
 
     def test_tu_so_khong_viet_hoa_giua_doan(self):
         self.assertEqual(viet_day_du("1/4 Đường số 33, Phường An Khánh"),
-                         "1/4 Đường số 33, Phường An Khánh")
+                         "1/4 Đường số 33, Phường An Khánh, "
+                         "Thành phố Hồ Chí Minh")
 
     def test_dia_chi_da_day_du_thi_chi_sua_chinh_ta(self):
         self.assertEqual(
@@ -93,6 +94,78 @@ class TestVietDayDu(unittest.TestCase):
     def test_khong_bo_bot_phan_nao(self):
         ra = viet_day_du("659, CMT8, P. Hòa hưng, Tphcm")
         self.assertEqual(ra.count(","), 3)
+
+
+class TestDauPhayVaUuTienTPHCM(unittest.TestCase):
+
+    def test_them_phay_truoc_phuong_va_thanh_pho(self):
+        for dia_chi in (
+            "659 CMT8 phường Hòa Hưng thành phố Hồ Chí Minh",
+            "659 CMT8 P. Hòa Hưng TP.HCM",
+            "659 CMT8 P Hòa Hưng TPHCM",
+            "659 CMT8 P Hòa Hưng HCM,",
+            "659 CMT8 phuong hoa hung tp hcm",
+            "659 CMT8, phường Hòa Hưng,, TP.HCM",
+        ):
+            with self.subTest(dia_chi=dia_chi):
+                self.assertEqual(chuan_hoa(dia_chi)["address"],
+                                 "659 Cách Mạng Tháng Tám, Phường Hòa Hưng, "
+                                 "Thành phố Hồ Chí Minh")
+
+    def test_thieu_thanh_pho_thi_tra_phuong_hcm(self):
+        ra = chuan_hoa("1/4 Đường số 33 phường An Khánh")
+        self.assertEqual(ra["address"], "1/4 Đường số 33, Phường An Khánh, "
+                         "Thành phố Hồ Chí Minh")
+        self.assertTrue(any("Đã bổ sung" in n for n in ra["warnings"]))
+
+    def test_ten_phuong_khong_co_tien_to_nhung_da_tach_doan(self):
+        self.assertEqual(chuan_hoa("17 Bùi Huy Bích, Phú Định")["address"],
+                         "17 Bùi Huy Bích, Phường Phú Định, "
+                         "Thành phố Hồ Chí Minh")
+
+    def test_xa_cu_chi_cung_thuoc_tp_hcm(self):
+        self.assertEqual(chuan_hoa("số 7 xã Củ Chi")["address"],
+                         "Số 7, Xã Củ Chi, Thành phố Hồ Chí Minh")
+
+    def test_phuong_cu_co_quan_de_doi_chinh_xac(self):
+        self.assertEqual(chuan_hoa("659 CMT8 P.13 Q.10")["address"],
+                         "659 Cách Mạng Tháng Tám, Phường Hòa Hưng, "
+                         "Thành phố Hồ Chí Minh")
+
+    def test_phuong_cu_co_mot_ket_qua(self):
+        self.assertEqual(chuan_hoa("12 Lê Lợi phường Bến Nghé")["address"],
+                         "12 Lê Lợi, Phường Sài Gòn, Thành phố Hồ Chí Minh")
+
+    def test_uu_tien_ten_moi_khi_trung_ten_xa_cu(self):
+        self.assertEqual(chuan_hoa("P. Hòa Hưng")["address"],
+                         "Phường Hòa Hưng, Thành phố Hồ Chí Minh")
+
+    def test_khong_suy_ra_hcm_khi_chua_xac_dinh_duoc_phuong(self):
+        for dia_chi in ("12 Lê Lợi phường Không Có Thật", "P.10",
+                        "12 Lê Lợi Q.1", "5 Nguyễn Trãi Phường 1",
+                        "17 đường Phú Định", "Phú Định"):
+            with self.subTest(dia_chi=dia_chi):
+                ra = chuan_hoa(dia_chi)
+                self.assertNotIn("Thành phố Hồ Chí Minh", ra["address"])
+                self.assertTrue(ra["warnings"])
+
+    def test_khong_thay_tinh_da_ghi_bang_hcm(self):
+        for dia_chi in ("12 Lê Lợi phường An Khánh thành phố Hà Nội",
+                        "12 Lê Lợi phường An Khánh Hà Nội",
+                        "12 Lê Lợi, Phường An Khánh, Tỉnh Quảng Ninh",
+                        "12 Lê Lợi Phường An Khánh Tỉnh Không Rõ"):
+            with self.subTest(dia_chi=dia_chi):
+                self.assertNotIn("Thành phố Hồ Chí Minh",
+                                 chuan_hoa(dia_chi)["address"])
+
+    def test_tinh_lo_va_thi_xa_khong_bi_tach_sai(self):
+        ra = chuan_hoa("12 Tỉnh lộ 10 phường Không Có Thật thị xã Giá Rai")
+        self.assertEqual(ra["address"],
+                         "12 Tỉnh lộ 10, Phường Không Có Thật, Thị xã Giá Rai")
+
+    def test_chuan_hoa_lan_hai_khong_doi_dia_chi(self):
+        dau = chuan_hoa("659 CMT8 phường Hòa Hưng")["address"]
+        self.assertEqual(chuan_hoa(dau)["address"], dau)
 
 
 class TestDanhMucHanhChinh(unittest.TestCase):
@@ -331,6 +404,15 @@ class TestFileBangSapNhapXa(unittest.TestCase):
 
 
 class TestApiDiaChi(unittest.TestCase):
+
+    def test_dia_chi_thieu_phay_va_thanh_pho(self):
+        r = client.post("/api/address", json={
+            "address": "659 CMT8 phường Hòa Hưng"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["address"],
+                         "659 Cách Mạng Tháng Tám, Phường Hòa Hưng, "
+                         "Thành phố Hồ Chí Minh")
+        self.assertIsNone(r.json()["lookup_url"])
 
     def test_chua_dang_nhap_thi_bi_chan(self):
         from fastapi.testclient import TestClient

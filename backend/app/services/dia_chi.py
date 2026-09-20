@@ -5,7 +5,7 @@ phải ghi đầy đủ và theo tên đơn vị hành chính hiện hành.
 
 Làm bốn việc, theo đúng thứ tự này:
 
-1. Mở rộng chữ viết tắt và sửa cách viết hoa.
+1. Tách cấp hành chính để thêm dấu phẩy, mở rộng chữ viết tắt và sửa cách viết hoa.
 2. Đổi tên tỉnh cũ đã hợp nhất sang tỉnh thành mới.
 3. Tra tên phường xã trong danh mục mới. Không thấy thì tra tiếp bảng xã
    cũ sang xã mới. Phải theo thứ tự này vì có tên vừa là phường mới có
@@ -181,6 +181,73 @@ TRANG_TRA_CUU = "https://vnexpress.net/tra-cuu-xa-phuong-sau-sap-nhap-4908879.ht
 # mang tên tỉnh thành được giữ riêng nên không bị nhầm.
 CAP_DA_BO = ("Quận", "Huyện", "Thị xã", "Thành phố")
 
+# Tách theo cả dấu phẩy và nhãn hành chính khi người nhập gõ liền địa chỉ.
+# Khớp trọn cụm "Thị xã" để không tách thêm một lần ở chữ "xã";
+# "Tỉnh lộ" là tên loại đường, không phải nhãn tỉnh.
+_NHAN_HANH_CHINH = re.compile(
+    r"(?<!\w)(?:"
+    r"(?:tp\.?\s*(?:hcm|hn|dn|ct)|hcm)\b"
+    r"|(?:"
+    r"(?:phường|phuong|xã|xa|quận|quan|huyện|huyen|"
+    r"thị\s+trấn|thi\s+tran|thị\s+xã|thi\s+xa|"
+    r"thành\s+phố|thanh\s+pho|đặc\s+khu|dac\s+khu)\s+"
+    r"|(?:tỉnh|tinh)\s+(?!(?:lộ|lo)\b)"
+    r"|(?:tp|tt|tx|p|q|x|h)(?:\.\s*|\s+)"
+    r")(?=\w))", re.IGNORECASE,
+)
+
+
+def _tach_doan(dia_chi: str) -> list[str]:
+    """Nhận nhãn hành chính dù chưa có dấu phẩy; giữ nguyên phần số/đường."""
+    dia_chi = unicodedata.normalize("NFC", dia_chi)
+    moc = [m.start() for m in _NHAN_HANH_CHINH.finditer(dia_chi)]
+    for vi_tri in reversed(moc):
+        if dia_chi[:vi_tri].strip(" ,"):
+            dia_chi = dia_chi[:vi_tri] + "," + dia_chi[vi_tri:]
+    return [d.strip() for d in dia_chi.split(",") if d.strip()]
+
+
+def _thu_tp_hcm(doan: list[str], danh_muc: dict) -> str | None:
+    """Thiếu tỉnh/thành: ưu tiên TP.HCM khi phường/xã có đối chiếu được.
+
+    Chỉ xét phần cuối địa chỉ (có thể kèm quận/huyện cũ). Không lấy tên
+    đường trùng tên phường để suy ra thành phố, không thay tỉnh đã ghi.
+    """
+    ma = danh_muc["tinh"].get("thanh pho ho chi minh")
+    if not ma:
+        return None
+    # Một tỉnh/thành ghi rõ nhưng không nhận ra cần được kiểm tra lại.
+    if any(d.startswith(("Tỉnh ", "Thành phố ")) for d in doan):
+        return None
+    cac_huyen = {
+        _khong_dau(_bo_cap_bat_ky(d))
+        for d in doan if d.startswith(CAP_DA_BO)
+    }
+    trong_tinh = danh_muc["don_vi"][ma]
+    bang = _bang_sap_nhap_xa().get("ho chi minh", {})
+    for i in range(len(doan) - 1, -1, -1):
+        d = doan[i]
+        if d.startswith(CAP_DA_BO):
+            continue
+        # Một tên đứng riêng không có cấp hành chính có thể là tên đường.
+        if i == 0 and d == _bo_tien_to(d):
+            return None
+        khoa = _khong_dau(_bo_tien_to(d))
+        if khoa in trong_tinh:
+            return ma
+        kha_nang = bang.get(khoa, [])
+        if cac_huyen:
+            kha_nang = [k for k in kha_nang
+                         if _khong_dau(_bo_cap_bat_ky(k["huyen_cu"]))
+                         in cac_huyen]
+        if len(kha_nang) == 1:
+            # Bảng cũ phải dẫn về một xã có trong danh mục hiện hành.
+            moi = _khong_dau(_bo_tien_to(kha_nang[0]["xa_moi"]))
+            if moi in trong_tinh:
+                return ma
+        return None
+    return None
+
 
 @lru_cache(maxsize=1)
 def _danh_muc() -> dict:
@@ -276,15 +343,14 @@ def chuan_hoa(dia_chi: str) -> dict:
     if not dia_chi or not dia_chi.strip():
         return {"address": "", "warnings": [], "lookup_url": None}
 
-    doan = [_mo_rong_mot_doan(d)
-            for d in re.split(r"\s*,\s*", dia_chi.strip()) if d.strip()]
+    doan = [_mo_rong_mot_doan(d) for d in _tach_doan(dia_chi)]
     doan = [d for d in doan if d]
     danh_muc = _danh_muc()
     if not danh_muc:
         return {"address": ", ".join(doan), "warnings": [],
                 "lookup_url": None}
 
-    # Tỉnh thành thường ở đoạn cuối; không có thì không quy chiếu được.
+    # Tỉnh thành ghi rõ luôn được xét trước quy tắc ưu tiên TP.HCM.
     ma_tinh = None
     vi_tri_tinh = None
     doi_ten_tinh = None
@@ -300,6 +366,13 @@ def chuan_hoa(dia_chi: str) -> dict:
             vi_tri_tinh = i
             doan[i] = danh_muc["ten_tinh"][ma]
             break
+    bo_sung_tp_hcm = False
+    if not ma_tinh:
+        ma_tinh = _thu_tp_hcm(doan, danh_muc)
+        if ma_tinh:
+            bo_sung_tp_hcm = True
+            vi_tri_tinh = len(doan)
+            doan.append(danh_muc["ten_tinh"][ma_tinh])
     if not ma_tinh:
         return {
             "address": ", ".join(doan),
@@ -350,6 +423,9 @@ def chuan_hoa(dia_chi: str) -> dict:
             break
 
     nhac: list[str] = []
+    if bo_sung_tp_hcm:
+        nhac.append("Đã bổ sung Thành phố Hồ Chí Minh theo phường/xã "
+                    "khớp danh mục ưu tiên. Kiểm tra lại địa chỉ trước khi in.")
     if doi_ten_tinh:
         nhac.append(f"Đã đổi \"{doi_ten_tinh}\" thành "
                     f"\"{danh_muc['ten_tinh'][ma_tinh]}\" theo Nghị quyết "
