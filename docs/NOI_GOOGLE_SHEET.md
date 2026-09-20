@@ -61,8 +61,23 @@ cột họ tên**, thiếu là hệ thống báo lỗi ngay.
 6. Bấm vào tài khoản máy vừa tạo → tab **Keys** → **Add key** →
    **Create new key** → chọn **JSON** → **Create**
 
-Google tải về một file `.json`. **Đây là chìa khóa, giữ như giữ mật khẩu.**
-Đừng gửi qua chat, đừng đưa lên GitHub.
+Google tải về một file `.json`.
+
+> ## ⛔ Dừng lại đọc kỹ chỗ này
+>
+> File vừa tải về chứa dòng `-----BEGIN PRIVATE KEY-----`. Đó là **chìa
+> khóa riêng**: ai cầm nó thì đọc và ghi được mọi Google Sheet đã chia sẻ
+> cho tài khoản máy này, **không cần mật khẩu, không cần xác thực hai lớp**.
+>
+> **File này chỉ được đi đúng một đường: từ máy bạn vào ô Environment của
+> Render.**
+>
+> Không gửi qua chat, Zalo, email hay Messenger — kể cả gửi cho người đang
+> hỗ trợ bạn. Không đưa lên GitHub. Không lưu vào thư mục dự án.
+>
+> Lỡ gửi rồi thì coi như đã lộ, **phải hủy khóa và tạo khóa mới**: vào
+> **Credentials → tài khoản máy → tab Keys**, xóa khóa cũ rồi **Add key →
+> Create new key**. Xóa file đi là chưa đủ.
 
 Mở file đó bằng Notepad, bên trong có dòng `"client_email": "...".` Chép
 lại email đó, dạng `hop-dong@ten-du-an.iam.gserviceaccount.com`.

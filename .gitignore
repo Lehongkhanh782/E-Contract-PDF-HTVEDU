@@ -29,3 +29,14 @@ frontend/dist/
 users.json
 backend/users.json
 *.secret
+
+# Khóa tài khoản máy của Google. Tên file Google đặt sẵn có dạng
+# <ten-du-an>-<ma>.json nên chặn rộng, thà nhầm còn hơn để lọt.
+*-*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
+!*.oxlintrc.json
+service-account*.json
+*credentials*.json
+*client_secret*.json
