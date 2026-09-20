@@ -1,5 +1,6 @@
 import copy
 import tempfile
+import unicodedata
 import unittest
 from pathlib import Path
 from zipfile import ZipFile
@@ -206,6 +207,84 @@ class CoreTests(unittest.TestCase):
         self.policy.pop('residual_allocation')
         with self.assertRaises(ValueError):
             g.calculate_example(self.data,self.policy)
+
+
+class DongThueTrongPhuLuc(unittest.TestCase):
+    """Phụ lục lương chỉ in dòng thuế với người trên ngưỡng chịu thuế."""
+
+    MAU = "Hop_dong_va_phu_luc_template.docx"
+    NHAN = "Thuế thu nhập cá nhân Người lao động đóng"
+
+    def _chu(self, luong: str) -> str:
+        data = g.load_json(g.ROOT / "examples/employee_demo.json")
+        data["compensation"]["salary_amount"] = luong
+        policy = g.load_json(g.ROOT / "config/salary_policy_example.json")
+        context, _ = g.build_context("dai_duong_xanh", data, policy)
+        with tempfile.TemporaryDirectory() as folder:
+            ra = Path(folder) / self.MAU
+            g.render_docx(g.ROOT / "templates" / self.MAU, ra, context)
+            with ZipFile(ra) as z:
+                root = etree.fromstring(z.read("word/document.xml"))
+        # Chữ trong mẫu Word ở dạng Unicode tổ hợp, chuỗi gõ trong bài kiểm
+        # thử ở dạng dựng sẵn; không chuẩn hóa thì so sánh nào cũng trượt.
+        return unicodedata.normalize(
+            "NFC", "".join(root.xpath("//w:t/text()", namespaces=g.NS))
+        )
+
+    def test_tren_nguong_thi_co_dong_thue(self):
+        chu = self._chu("20000000")
+        self.assertIn(self.NHAN, chu)
+        self.assertIn("225.000", chu)
+
+    def test_duoi_nguong_thi_bo_han_dong_thue(self):
+        """In 'Thuế: 0 VNĐ' trông như nhà trường quên tính, nên bỏ hẳn dòng."""
+        self.assertNotIn(self.NHAN, self._chu("8000000"))
+
+    def test_dung_nguong_van_khong_co_dong_thue(self):
+        self.assertNotIn(self.NHAN, self._chu("15500000"))
+
+    def test_dong_thue_nam_trong_muc_nguoi_lao_dong_chi_tra(self):
+        chu = self._chu("20000000")
+        muc = chu.index("Người lao động chi trả theo quy định của Pháp luật")
+        thue = chu.index(self.NHAN)
+        tong = chu.index("Tổng thu nhập:")
+        self.assertLess(muc, thue)
+        self.assertLess(thue, tong)
+
+
+class BoDongNeuTrong(unittest.TestCase):
+    """Cơ chế bỏ dòng có điều kiện, dùng cho dòng thuế."""
+
+    def _doan(self, chu: str):
+        xml = (f'<w:document xmlns:w="{g.W}"><w:body><w:p><w:r><w:t>{chu}'
+               '</w:t></w:r></w:p></w:body></w:document>')
+        return etree.fromstring(xml.encode())
+
+    def _con_lai(self, chu: str, gia_tri: str) -> str:
+        root = self._doan(chu)
+        g.bo_dong_neu_trong(root, {"chi_khi": {"thue": gia_tri}})
+        return "".join(root.xpath("//w:t/text()", namespaces=g.NS))
+
+    def test_gia_tri_khac_khong_thi_giu_dong_va_bo_dau(self):
+        self.assertEqual(
+            self._con_lai("{{ chi_khi.thue }}Thuế: x", "225000"), "Thuế: x")
+
+    def test_bang_khong_thi_xoa_ca_dong(self):
+        self.assertEqual(self._con_lai("{{ chi_khi.thue }}Thuế: x", "0"), "")
+
+    def test_rong_cung_xoa_ca_dong(self):
+        self.assertEqual(self._con_lai("{{ chi_khi.thue }}Thuế: x", ""), "")
+
+    def test_thieu_bien_thi_bao_loi_chu_khong_im_lang_bo_dong(self):
+        root = self._doan("{{ chi_khi.chua_khai }}x")
+        with self.assertRaises(ValueError):
+            g.bo_dong_neu_trong(root, {"chi_khi": {}})
+
+    def test_dong_khong_co_dau_thi_khong_dung_toi(self):
+        root = self._doan("Dòng thường")
+        g.bo_dong_neu_trong(root, {"chi_khi": {}})
+        self.assertEqual(
+            "".join(root.xpath("//w:t/text()", namespaces=g.NS)), "Dòng thường")
 
 
 if __name__ == "__main__":

@@ -10,8 +10,8 @@ export const TEN_HE_THONG = 'Hệ thống hợp đồng lao động'
  * Tăng số này mỗi khi có thay đổi người dùng nhìn thấy được, để biết máy
  * chủ đã chạy bản mới hay còn bản cũ trong bộ nhớ đệm trình duyệt.
  */
-export const PHIEN_BAN = '1.5'
-export const MO_TA_PHIEN_BAN = 'hộp chọn nhân viên gọn và sạch'
+export const PHIEN_BAN = '1.6'
+export const MO_TA_PHIEN_BAN = 'phụ lục lương có dòng thuế'
 
 /**
  * Khối thương hiệu dùng chung.

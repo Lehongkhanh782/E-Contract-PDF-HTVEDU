@@ -97,10 +97,12 @@ export default function EmployeePicker({
     return { chinh: chinh.slice(0, 50), them: them.slice(0, 20) }
   }, [cung_co_so, chua_ro_co_so, tim])
 
-  // Đổi cơ sở thì bỏ chữ đang tìm và thu hộp, để không còn kết quả cũ.
+  // Chọn cơ sở xong thì sổ danh sách ra luôn, vì việc tiếp theo bao giờ
+  // cũng là chọn người. Bỏ chữ đang tìm và tên đã chọn của cơ sở trước.
   useEffect(() => {
     setTim('')
-    setDangMo(false)
+    setDaChon(null)
+    setDangMo(Boolean(unitId))
   }, [unitId])
 
   if (danh_sach === null) return null

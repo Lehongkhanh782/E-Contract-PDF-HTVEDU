@@ -35,6 +35,8 @@ W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS = {"w": W}
 XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
 TOKEN = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s*\}\}")
+# Đánh dấu dòng chỉ in khi biến tương ứng có giá trị, xem bo_dong_neu_trong.
+CHI_KHI = re.compile(r"\{\{\s*chi_khi\.([a-zA-Z0-9_]+)\s*\}\}")
 ROOT = Path(__file__).resolve().parent
 
 
@@ -85,6 +87,29 @@ def resolve(data: dict, dotted: str):
     return value
 
 
+def bo_dong_neu_trong(root, context: dict) -> None:
+    """Xóa hẳn đoạn văn có {{ chi_khi.x }} khi x rỗng hoặc bằng 0.
+
+    Mẫu Word không có câu lệnh điều kiện, mà phụ lục lương cần bỏ hẳn dòng
+    thuế với người chưa tới ngưỡng chịu thuế: in "Thuế: 0 VNĐ" trông như
+    nhà trường quên tính. Đây là cách duy nhất có điều kiện, và chỉ xét
+    đúng một biến chứ không phải biểu thức, để mẫu vẫn không chạy được mã.
+    """
+    for paragraph in list(root.xpath("//w:p", namespaces=NS)):
+        text = "".join(paragraph.xpath(".//w:t/text()", namespaces=NS))
+        khop = CHI_KHI.search(text)
+        if not khop:
+            continue
+        nhom = context.get("chi_khi") or {}
+        if khop.group(1) not in nhom:
+            raise ValueError(f"Thiếu biến chi_khi.{khop.group(1)}")
+        gia_tri = str(nhom[khop.group(1)]).strip()
+        if gia_tri in ("", "0"):
+            paragraph.getparent().remove(paragraph)
+        else:
+            replace_span(paragraph, khop.start(), khop.end(), "")
+
+
 def render_docx(template: Path, output: Path, context: dict):
     """Literal dotted variables only: no expressions, calls, filters or eval."""
     parser = etree.XMLParser(resolve_entities=False, no_network=True)
@@ -94,6 +119,7 @@ def render_docx(template: Path, output: Path, context: dict):
             content = source.read(info.filename)
             if info.filename.startswith("word/") and info.filename.endswith(".xml"):
                 root = etree.fromstring(content, parser)
+                bo_dong_neu_trong(root, context)
                 for paragraph in root.xpath("//w:p", namespaces=NS):
                     text = "".join(paragraph.xpath(".//w:t/text()", namespaces=NS))
                     for match in reversed(list(TOKEN.finditer(text))):
@@ -457,6 +483,8 @@ def build_context(unit_id: str, data: dict, policy: dict, agreement_pages=3):
             "page_count_label": page_count_label(agreement_pages),
         },
         "display": {key: money(Decimal(value)) for key, value in result.items()},
+        # Dưới ngưỡng chịu thuế thì bỏ hẳn dòng thuế khỏi phụ lục.
+        "chi_khi": {"thue": str(result["pit_withheld"])},
     }
     context["employee"]["birth_date"] = date_short(data["employee"]["birth_date"])
     context["employee"]["identity_issue_date"] = date_short(data["employee"]["identity_issue_date"])
