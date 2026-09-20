@@ -182,6 +182,7 @@ def sheets_status(_: User = Depends(current_user)) -> dict:
         du_lieu = sheets.danh_sach_nhan_vien()
         ket_qua.update({
             "connected": True,
+            "tab_used": du_lieu["tab"],
             "headers": du_lieu["headers"],
             "columns": du_lieu["columns"],
             "employee_count": len(du_lieu["employees"]),

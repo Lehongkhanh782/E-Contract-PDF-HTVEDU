@@ -263,21 +263,45 @@ def danh_sach_tab() -> list[str]:
     return [t["properties"]["title"] for t in du_lieu.get("sheets", [])]
 
 
+# Tên tab chứa danh sách nhân viên, viết không dấu và viết thường. Sheet
+# dùng chung với ứng dụng nhân sự có cả chục tab, tab đầu tiên thường là
+# hướng dẫn chứ không phải dữ liệu, nên phải tìm theo tên.
+TEN_TAB_NHAN_SU = (
+    "nhan su", "nhan vien", "danh sach nhan su", "danh sach nhan vien",
+    "ho so nhan su", "employees", "employee", "staff", "personnel",
+)
+
+
+def chon_tab(cac_tab: list[str]) -> str:
+    """Chọn tab nhiều khả năng chứa danh sách nhân viên nhất."""
+    if not cac_tab:
+        raise LoiSheet("Sheet này không có tab nào")
+    sach = {ten: _khong_dau(ten).replace("_", " ") for ten in cac_tab}
+    # Trùng khít tên trước, rồi mới tới tên có chứa từ khóa, để "NHAN_SU"
+    # được chọn thay vì "LICH_SU_NHAN_SU" nếu Sheet có cả hai.
+    for ten_mau in TEN_TAB_NHAN_SU:
+        for ten, gon in sach.items():
+            if gon == ten_mau:
+                return ten
+    for ten_mau in TEN_TAB_NHAN_SU:
+        for ten, gon in sach.items():
+            if ten_mau in gon:
+                return ten
+    return cac_tab[0]
+
+
 def _tab_dang_dung() -> str:
     _, _, tab = _cau_hinh()
     if tab:
         return tab
-    cac_tab = danh_sach_tab()
-    if not cac_tab:
-        raise LoiSheet("Sheet này không có tab nào")
-    return cac_tab[0]
+    return chon_tab(danh_sach_tab())
 
 
-def _doc_o() -> list[list[str]]:
+def _doc_o() -> tuple[str, list[list[str]]]:
     tab = _tab_dang_dung()
     du_lieu = _goi(f"/values/{tab}!A1:Z{SO_DONG_TOI_DA}",
                    {"majorDimension": "ROWS"})
-    return du_lieu.get("values", [])
+    return tab, du_lieu.get("values", [])
 
 
 def doan_cot(tieu_de: list[str]) -> dict[str, int]:
@@ -304,28 +328,33 @@ def doan_cot(tieu_de: list[str]) -> dict[str, int]:
 
 
 _khoa_nho = threading.Lock()
-_nho: tuple[list[dict], dict[str, int], list[str], float] | None = None
+_nho: tuple[list[dict], dict[str, int], list[str], str, float] | None = None
 
 
 def danh_sach_nhan_vien(lam_moi: bool = False) -> dict[str, Any]:
     """Đọc Sheet và trả về danh sách nhân viên đã quy về tên trường của form."""
     global _nho
     with _khoa_nho:
-        if _nho and not lam_moi and time.time() - _nho[3] < THOI_GIAN_NHO:
-            nhan_vien, cot, tieu_de, luc = _nho
+        if _nho and not lam_moi and time.time() - _nho[4] < THOI_GIAN_NHO:
+            nhan_vien, cot, tieu_de, tab, luc = _nho
             return {"employees": nhan_vien, "columns": cot,
-                    "headers": tieu_de, "cached": True}
+                    "headers": tieu_de, "tab": tab, "cached": True}
 
-    o = _doc_o()
+    tab, o = _doc_o()
     if not o:
-        raise LoiSheet("Tab đang dùng không có dữ liệu nào")
+        raise LoiSheet(f"Tab \"{tab}\" không có dữ liệu nào")
 
     tieu_de = [str(x) for x in o[0]]
     cot = doan_cot(tieu_de)
     if "full_name" not in cot:
+        # Nói rõ đang đọc tab nào và thấy những cột gì, để biết là chọn nhầm
+        # tab hay là tên cột khác với dự kiến.
+        thay = ", ".join(t for t in tieu_de if t.strip()) or "(không có cột nào)"
         raise LoiSheet(
-            "Không nhận ra cột họ tên. Đặt tên cột ở dòng đầu là "
-            "\"Họ và tên\" rồi thử lại."
+            f"Đang đọc tab \"{tab}\" nhưng không nhận ra cột họ tên. "
+            f"Các cột thấy được ở dòng đầu: {thay}. "
+            "Nếu đây không phải tab chứa danh sách nhân viên, hãy khai "
+            "ECONTRACT_SHEET_TAB trên máy chủ bằng đúng tên tab cần đọc."
         )
 
     nhan_vien = []
@@ -338,9 +367,9 @@ def danh_sach_nhan_vien(lam_moi: bool = False) -> dict[str, Any]:
             nhan_vien.append(ban_ghi)
 
     with _khoa_nho:
-        _nho = (nhan_vien, cot, tieu_de, time.time())
+        _nho = (nhan_vien, cot, tieu_de, tab, time.time())
     return {"employees": nhan_vien, "columns": cot,
-            "headers": tieu_de, "cached": False}
+            "headers": tieu_de, "tab": tab, "cached": False}
 
 
 def xoa_bo_nho() -> None:

@@ -111,7 +111,8 @@ class TestDocNhanVien(unittest.TestCase):
 
     def chay(self, o=None, **them):
         with dat_cau_hinh(**them), mock.patch.object(
-            sheets, "_doc_o", return_value=O_MAU if o is None else o
+            sheets, "_doc_o",
+            return_value=("NHAN_SU", O_MAU if o is None else o)
         ):
             return sheets.danh_sach_nhan_vien(lam_moi=True)
 
@@ -148,7 +149,7 @@ class TestDocNhanVien(unittest.TestCase):
 
     def test_lan_hai_lay_tu_bo_nho_tam(self):
         with dat_cau_hinh(), mock.patch.object(
-            sheets, "_doc_o", return_value=O_MAU
+            sheets, "_doc_o", return_value=("NHAN_SU", O_MAU)
         ) as gia:
             sheets.danh_sach_nhan_vien(lam_moi=True)
             lai = sheets.danh_sach_nhan_vien()
@@ -357,6 +358,81 @@ class ThuVienDayDu(unittest.TestCase):
             ImportError("The requests library is not installed."))
         self.assertIn("máy chủ", cau)
         self.assertIn("requirements.txt", cau)
+
+
+# Đúng danh sách tab của Sheet nhân sự đang dùng thật, để bài kiểm thử bám
+# vào tình huống có thật chứ không phải ví dụ tự nghĩ ra.
+TAB_THAT = [
+    "HUONG_DAN_SU_DUNG", "THONG_BAO", "TOKEN_THIET_BI", "NHAN_SU",
+    "NHAT_KY_2026", "CHAM_CONG", "LUONG", "LICH_SU_LUONG", "DON_VI",
+    "PHEP_NAM", "TAI_KHOAN", "DON_XIN_NGHI", "LOAI_NGHI", "CAU_HINH",
+    "NHAT_KY_HE_THONG",
+]
+
+
+class ChonTab(unittest.TestCase):
+    """Sheet dùng chung có cả chục tab, tab đầu là hướng dẫn chứ không phải
+    dữ liệu, nên không được cứ nhắm mắt lấy tab đầu tiên."""
+
+    def test_chon_nhan_su_chu_khong_phai_tab_dau(self):
+        self.assertEqual(sheets.chon_tab(TAB_THAT), "NHAN_SU")
+
+    def test_nhan_ra_nhieu_kieu_dat_ten(self):
+        for ten in ("Nhân sự", "NHAN_VIEN", "Danh sách nhân viên",
+                    "Employees", "STAFF"):
+            self.assertEqual(sheets.chon_tab(["Hướng dẫn", ten]), ten)
+
+    def test_ten_trung_khit_thang_ten_chi_chua_tu_khoa(self):
+        self.assertEqual(
+            sheets.chon_tab(["LICH_SU_NHAN_SU", "NHAN_SU"]), "NHAN_SU")
+
+    def test_khong_tab_nao_khop_thi_lay_tab_dau(self):
+        self.assertEqual(sheets.chon_tab(["Sheet1", "Sheet2"]), "Sheet1")
+
+    def test_sheet_khong_co_tab_nao(self):
+        with self.assertRaises(sheets.LoiSheet):
+            sheets.chon_tab([])
+
+    def test_khai_ten_tab_thi_theo_dung_ten_do(self):
+        """Khai ECONTRACT_SHEET_TAB là quyết định cuối cùng, không đoán nữa."""
+        with dat_cau_hinh(ECONTRACT_SHEET_TAB="LUONG"), mock.patch.object(
+            sheets, "danh_sach_tab", return_value=TAB_THAT
+        ) as gia:
+            self.assertEqual(sheets._tab_dang_dung(), "LUONG")
+        gia.assert_not_called()
+
+    def test_khong_khai_thi_tu_tim(self):
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "danh_sach_tab", return_value=TAB_THAT
+        ):
+            self.assertEqual(sheets._tab_dang_dung(), "NHAN_SU")
+
+
+class LoiThieuCotHoTen(unittest.TestCase):
+    """Báo lỗi phải đủ thông tin để biết ngay phải sửa gì."""
+
+    def setUp(self):
+        sheets.xoa_bo_nho()
+
+    def _loi(self):
+        o = [["Mã", "Ghi chú"], ["NV-001", "x"]]
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "_doc_o", return_value=("CHAM_CONG", o)
+        ):
+            with self.assertRaises(sheets.LoiSheet) as bat:
+                sheets.danh_sach_nhan_vien(lam_moi=True)
+        return str(bat.exception)
+
+    def test_noi_ro_dang_doc_tab_nao(self):
+        self.assertIn("CHAM_CONG", self._loi())
+
+    def test_liet_ke_cac_cot_thay_duoc(self):
+        loi = self._loi()
+        self.assertIn("Mã", loi)
+        self.assertIn("Ghi chú", loi)
+
+    def test_chi_cach_khai_ten_tab(self):
+        self.assertIn("ECONTRACT_SHEET_TAB", self._loi())
 
 
 if __name__ == "__main__":
