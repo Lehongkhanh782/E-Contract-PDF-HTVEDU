@@ -4,6 +4,7 @@ import {
   UnauthorizedError,
   downloadProbationPdf,
   fetchPrincipals,
+  tidyAddress,
 } from './api'
 import { Field, Section, Select } from './components'
 import EmployeePicker from './EmployeePicker'
@@ -148,6 +149,14 @@ export default function ProbationForm({
     return can.filter(([, v]) => !v.trim()).map(([ten]) => ten)
   }, [form])
 
+  /** Rời khỏi ô địa chỉ thì viết lại cho đầy đủ, bỏ chữ viết tắt. */
+  async function vietDayDuDiaChi() {
+    const day_du = await tidyAddress(form.employee.permanent_address)
+    if (day_du !== form.employee.permanent_address) {
+      patch('employee', { permanent_address: day_du })
+    }
+  }
+
   async function taiVe() {
     setStatus({
       kind: 'busy',
@@ -271,8 +280,10 @@ export default function ProbationForm({
           label="Địa chỉ thường trú"
           required
           wide
+          hint="Rời khỏi ô thì hệ thống tự viết đầy đủ, bỏ chữ viết tắt."
           value={form.employee.permanent_address}
           onChange={(v) => patch('employee', { permanent_address: v })}
+          onBlur={vietDayDuDiaChi}
         />
       </Section>
 

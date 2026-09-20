@@ -60,6 +60,23 @@ export function fetchEmployees() {
   return getJson<EmployeeList>('/api/employees')
 }
 
+/** Viết đầy đủ địa chỉ thay vì viết tắt. Lỗi thì giữ nguyên chữ đã gõ. */
+export async function tidyAddress(address: string): Promise<string> {
+  if (!address.trim()) return address
+  try {
+    const r = await fetch('/api/address', {
+      ...WITH_SESSION,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address }),
+    })
+    if (!r.ok) return address
+    return ((await r.json()) as { address: string }).address || address
+  } catch {
+    return address
+  }
+}
+
 /** Hiệu trưởng từng cơ sở; trả về rỗng nếu chưa nối Sheet. */
 export function fetchPrincipals() {
   return getJson<PrincipalList>('/api/principals')

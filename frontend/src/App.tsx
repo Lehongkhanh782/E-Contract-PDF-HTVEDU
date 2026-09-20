@@ -7,6 +7,7 @@ import {
   fetchPositions,
   fetchUnits,
   logout,
+  tidyAddress,
 } from './api'
 import { Field, Section, Select, TextArea } from './components'
 import {
@@ -211,6 +212,14 @@ function ContractWorkspace({
     ]
     return required.filter(([, value]) => !value.trim()).map(([label]) => label)
   }, [form])
+
+  /** Rời khỏi ô địa chỉ thì viết lại cho đầy đủ, bỏ chữ viết tắt. */
+  async function vietDayDuDiaChi() {
+    const day_du = await tidyAddress(form.employee.permanent_address)
+    if (day_du !== form.employee.permanent_address) {
+      patch('employee', { permanent_address: day_du })
+    }
+  }
 
   async function runDownload() {
     setStatus({
@@ -433,6 +442,8 @@ function ContractWorkspace({
         />
         <Field
           label="Địa chỉ thường trú"
+          hint="Rời khỏi ô thì hệ thống tự viết đầy đủ, bỏ chữ viết tắt."
+          onBlur={vietDayDuDiaChi}
           required
           wide
           value={form.employee.permanent_address}

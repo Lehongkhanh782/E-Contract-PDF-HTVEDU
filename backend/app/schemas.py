@@ -158,6 +158,12 @@ class ProbationRequest(Strict):
         return payload
 
 
+class AddressRequest(Strict):
+    """Địa chỉ cần viết lại cho đầy đủ."""
+
+    address: Annotated[str, Field(max_length=2000)]
+
+
 class SalaryRequest(Strict):
     """Chỉ những gì cần để tính lương, không đòi hồ sơ đầy đủ."""
 

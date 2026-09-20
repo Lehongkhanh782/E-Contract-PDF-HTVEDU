@@ -44,6 +44,7 @@ export function Field({
   wide,
   required,
   inputMode,
+  onBlur,
 }: {
   label: string
   value: string
@@ -53,6 +54,7 @@ export function Field({
   wide?: boolean
   required?: boolean
   inputMode?: 'numeric' | 'text'
+  onBlur?: () => void
 }) {
   return (
     <label
@@ -69,6 +71,7 @@ export function Field({
         value={value}
         inputMode={inputMode}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
       />
       {type === 'date' && vietnameseDate(value) && (
         <span className="hint">{vietnameseDate(value)}</span>

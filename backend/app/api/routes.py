@@ -15,8 +15,13 @@ from starlette.background import BackgroundTask
 from app import config
 from app.auth import User
 from app.deps import current_user, require_unit
-from app.schemas import ContractRequest, ProbationRequest, SalaryRequest
-from app.services import documents, ocr, sheets
+from app.schemas import (
+    AddressRequest,
+    ContractRequest,
+    ProbationRequest,
+    SalaryRequest,
+)
+from app.services import dia_chi, documents, ocr, sheets
 
 logger = logging.getLogger("econtract.ocr")
 
@@ -166,6 +171,17 @@ async def ocr_giay_to(
         ) from loi
 
     return JSONResponse(ket_qua)
+
+
+@router.post("/address")
+def chuan_hoa_dia_chi(request: AddressRequest,
+                      _: User = Depends(current_user)) -> dict:
+    """Viết đầy đủ địa chỉ thay vì viết tắt.
+
+    Chỉ mở rộng chữ viết tắt và sửa cách viết hoa; không thêm thông tin
+    người dùng chưa gõ và không đổi tên phường xã theo đợt sáp nhập.
+    """
+    return {"address": dia_chi.viet_day_du(request.address)}
 
 
 @router.get("/sheets/status")
