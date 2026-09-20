@@ -18,7 +18,9 @@ export const emptyForm: ContractForm = {
     nationality: 'Việt Nam',
     identity_number: '',
     identity_issue_date: '',
-    identity_issuer: '',
+    // CCCD gắn chip đều do Cục Cảnh sát cấp nên điền sẵn; vẫn sửa được
+    // cho trường hợp giấy tờ cũ do công an tỉnh cấp.
+    identity_issuer: 'Cục Cảnh sát',
     permanent_address: '',
   },
   job: { position_id: '' },

@@ -391,6 +391,7 @@ function ContractWorkspace({
         <Field
           label="Nơi cấp"
           required
+          hint="Điền sẵn Cục Cảnh sát; sửa lại nếu giấy tờ cũ do tỉnh cấp."
           value={form.employee.identity_issuer}
           onChange={(value) => patch('employee', { identity_issuer: value })}
         />
