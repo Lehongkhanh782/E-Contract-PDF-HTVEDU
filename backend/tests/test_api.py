@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import unittest
 from copy import deepcopy
+from unittest import mock
 
 from fastapi.testclient import TestClient  # noqa: F401  (dùng gián tiếp)
 
+from app.services import documents
 from tests import logged_in_client, sample_request
 
 client = logged_in_client()
@@ -19,7 +21,21 @@ class TestConfigEndpoints(unittest.TestCase):
     def test_health(self):
         response = client.get("/api/health")
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json()["demo_only"])
+        # Bám theo chế độ phát hành trong cấu hình, không còn đóng cứng True.
+        self.assertEqual(response.json()["demo_only"],
+                         documents.ban_thu_nghiem())
+
+    def test_health_bao_dung_khi_dang_la_ban_thu_nghiem(self):
+        with mock.patch.object(documents, "ban_thu_nghiem", return_value=True):
+            self.assertTrue(client.get("/api/health").json()["demo_only"])
+
+    def test_thong_bao_doi_theo_che_do_phat_hanh(self):
+        with mock.patch.object(documents, "ban_thu_nghiem", return_value=True):
+            self.assertIn("thử nghiệm",
+                          client.get("/api/units").json()["notice"])
+        with mock.patch.object(documents, "ban_thu_nghiem", return_value=False):
+            self.assertIn("ký thật",
+                          client.get("/api/units").json()["notice"])
 
     def test_units_lists_four_configured_units(self):
         body = client.get("/api/units").json()
@@ -42,7 +58,10 @@ class TestConfigEndpoints(unittest.TestCase):
         wages = {p["position_id"]: p["base_wage"] for p in body["positions"]}
         self.assertEqual(wages["principal"], "7000000")
         self.assertEqual(wages["english_teacher"], "5310000")
-        self.assertEqual(len(wages), 5)
+        # Sáu vị trí kế toán xác nhận ngày 2026-09-20 đều 5.310.000đ.
+        self.assertEqual(wages["security_guard"], "5310000")
+        self.assertEqual(wages["department_head"], "5310000")
+        self.assertEqual(len(wages), 11)
 
     def test_defaults_are_marked_pending_review(self):
         body = client.get("/api/defaults").json()
@@ -71,7 +90,7 @@ class TestPreview(unittest.TestCase):
     def test_preview_reports_policy_is_example_only(self):
         body = client.post("/api/preview", json=sample_request()).json()
         self.assertEqual(body["policy_status"], "example_only")
-        self.assertTrue(body["demo_only"])
+        self.assertEqual(body["demo_only"], documents.ban_thu_nghiem())
 
 
 class TestTinhLuongNhanh(unittest.TestCase):

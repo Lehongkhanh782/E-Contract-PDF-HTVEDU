@@ -556,18 +556,23 @@ class DoiChucVu(unittest.TestCase):
         "Giáo viên Mầm non": "preschool_teacher",
         "Giáo viên Tiếng Anh": "english_teacher",
         "Bảo mẫu": "nanny",
+        # Sáu vị trí kế toán bổ sung ngày 2026-09-20.
+        "Trưởng Phòng": "department_head",
+        "Hành chính": "admin_staff",
+        "Hành chính bán trú": "boarding_admin",
+        "Cấp Dưỡng": "cook",
+        "Phụ bếp - Tạp vụ": "kitchen_assistant",
+        "Bảo vệ": "security_guard",
     }
-    CHUA_CAU_HINH = ("Bảo vệ", "Cấp Dưỡng", "Hành chính",
-                     "Hành chính bán trú", "Phụ bếp - Tạp vụ", "Trưởng Phòng")
 
-    def test_nhan_ra_chuc_vu_da_cau_hinh(self):
+    def test_nhan_ra_het_muoi_chuc_vu_tren_sheet(self):
         for ten, mong_doi in self.KHOP.items():
             self.assertEqual(sheets.doi_chuc_vu(ten), mong_doi, ten)
 
-    def test_chuc_vu_chua_cau_hinh_thi_de_trong(self):
+    def test_chuc_vu_la_thi_de_trong(self):
         """Gán bừa vị trí là gán sai lương cơ sở và sai thỏa thuận trách
         nhiệm, nên thà để trống cho người dùng tự chọn."""
-        for ten in self.CHUA_CAU_HINH:
+        for ten in ("Chuyên viên gì đó", "", None, "Tài xế"):
             self.assertIsNone(sheets.doi_chuc_vu(ten), ten)
 
     def test_khong_phan_biet_hoa_thuong(self):
@@ -615,9 +620,9 @@ class QuyVeCauHinh(unittest.TestCase):
         self.assertEqual(nv["unit"], "GP")
         self.assertEqual(nv["position"], "Bảo mẫu")
 
-    def test_chua_cau_hinh_thi_de_trong(self):
+    def test_chuc_vu_la_thi_de_trong(self):
         o = [["Ho_Ten", "Ma_Truong", "Chuc_Vu"],
-             ["Lê Thị Năm", "VST", "Bảo vệ"]]
+             ["Lê Thị Năm", "VST", "Chuyên viên gì đó"]]
         nv = self._chay(o)[0]
         self.assertEqual(nv["unit_id"], "vuon_sang_tao")
         self.assertIsNone(nv["position_id"])

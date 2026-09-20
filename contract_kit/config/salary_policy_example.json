@@ -10,20 +10,22 @@
   },
   "rounding": "ROUND_HALF_UP_TO_1_VND_FOR_DEMO_ONLY",
   "requires_confirmation": [
-    "insurance_base_components",
     "insurance_eligibility",
-    "rates_and_effective_dates",
     "union_membership",
-    "union_bases_and_caps",
-    "pit_method",
     "allowance_components",
     "rounding_policy",
-    "residual_income_allocation",
     "net_gross_deduction_function"
   ],
   "payroll_automatic_responsibility_deduction": false,
   "deduction_model": "explicit_fixed_amounts_example_only",
   "residual_allocation": "position_allowance_example_only",
-  "gross_dependent_tax_implemented": false,
-  "net_search_assumption": "net(gross) is deterministic and nondecreasing in whole VND"
+  "gross_dependent_tax_implemented": true,
+  "net_search_assumption": "net(gross) is deterministic and nondecreasing in whole VND",
+  "pit": {
+    "threshold": "15500000",
+    "rate": "0.05",
+    "rule": "Thu nhập trên ngưỡng thì phần vượt ngưỡng chịu thuế theo tỷ lệ",
+    "source": "ke_toan_xac_nhan_2026-09-20"
+  },
+  "rates_source": "ke_toan_xac_nhan_2026-09-20"
 }

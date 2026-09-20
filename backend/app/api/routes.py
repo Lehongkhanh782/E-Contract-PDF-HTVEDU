@@ -22,10 +22,15 @@ logger = logging.getLogger("econtract.ocr")
 
 router = APIRouter(prefix="/api")
 
-DEMO_NOTICE = (
-    "Bản thử nghiệm. Mọi PDF đều mang dấu DỮ LIỆU GIẢ - CHƯA DÙNG KÝ "
-    "và không dùng để ký thật."
-)
+
+def _thong_bao_phat_hanh() -> str:
+    """Câu nhắc hiện trên đầu trang, bám theo chế độ phát hành đang đặt."""
+    if documents.ban_thu_nghiem():
+        return ("Bản thử nghiệm. Mọi PDF đều mang dấu DỮ LIỆU GIẢ - CHƯA "
+                "DÙNG KÝ và không dùng để ký thật.")
+    return ("Bản ký thật. Mức lương, tỷ lệ bảo hiểm và cách tính thuế đã "
+            "được kế toán xác nhận ngày 20/09/2026. Vẫn phải đọc lại hợp "
+            "đồng trước khi in.")
 
 
 def _ascii_filename(name: str) -> str:
@@ -37,7 +42,7 @@ def _ascii_filename(name: str) -> str:
 
 @router.get("/health")
 def health() -> dict:
-    return {"status": "ok", "demo_only": True}
+    return {"status": "ok", "demo_only": documents.ban_thu_nghiem()}
 
 
 @router.get("/units")
@@ -59,7 +64,7 @@ def list_units(user: User = Depends(current_user)) -> dict:
             for unit in config.units()
             if user.may_use(unit["unit_id"])
         ],
-        "notice": DEMO_NOTICE,
+        "notice": _thong_bao_phat_hanh(),
     }
 
 
@@ -88,7 +93,6 @@ def form_defaults(_: User = Depends(current_user)) -> dict:
         "payment": data["payment"],
         "contract": {"type_term_text": data["contract"]["type_term_text"]},
         "compensation": {
-            "pit_withheld": data["compensation"]["pit_withheld"],
             "salary_mode": data["compensation"]["salary_mode"],
         },
         "status": "example_values_pending_review",
@@ -237,7 +241,7 @@ def salary(request: SalaryRequest,
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return JSONResponse({
-        "demo_only": True,
+        "demo_only": documents.ban_thu_nghiem(),
         "calculation": ket_qua,
         "policy_status": config.salary_policy()["status"],
     })
@@ -254,11 +258,11 @@ def preview(request: ContractRequest,
         raise HTTPException(status_code=400, detail=str(error)) from error
     return JSONResponse(
         {
-            "demo_only": True,
+            "demo_only": documents.ban_thu_nghiem(),
             "unit_id": request.unit_id,
             "calculation": result,
             "policy_status": config.salary_policy()["status"],
-            "notice": DEMO_NOTICE,
+            "notice": _thong_bao_phat_hanh(),
         }
     )
 

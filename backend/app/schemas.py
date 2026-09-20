@@ -58,7 +58,6 @@ class Compensation(Strict):
     insurance_base: Money
     employer_union_base: Money
     employee_union_base: Money
-    pit_withheld: Money
     salary_mode: Literal["gross", "net"]
     salary_amount: Money
 

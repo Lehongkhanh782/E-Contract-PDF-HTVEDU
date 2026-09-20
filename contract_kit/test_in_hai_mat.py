@@ -6,16 +6,24 @@ phần phải bắt đầu ở mặt trước của một tờ mới, tức là 
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
+import sys
+import tempfile
 import unittest
 from decimal import Decimal
 from pathlib import Path
+from unittest import mock
 
+import generate_demo as g
 from generate_demo import (
+    ban_thu_nghiem,
     build_context,
     can_thoa_thuan,
     doc_so_tien,
     load_json,
     money,
+    so_van_ban,
 )
 
 ROOT = Path(__file__).resolve().parent
@@ -132,9 +140,17 @@ class TestAiPhaiKyThoaThuan(unittest.TestCase):
         "english_teacher": True,
         "nanny": True,
         "admissions_marketing": False,
+        # Kế toán xác nhận 2026-09-20: sáu vị trí này không trực tiếp dạy
+        # và trông trẻ nên không kèm thỏa thuận trách nhiệm.
+        "department_head": False,
+        "admin_staff": False,
+        "boarding_admin": False,
+        "cook": False,
+        "kitchen_assistant": False,
+        "security_guard": False,
     }
 
-    def test_cau_hinh_khai_du_nam_vi_tri(self):
+    def test_cau_hinh_khai_du_cac_vi_tri(self):
         rules = load_json(ROOT / "config/business_rules.json")["positions"]
         thuc_te = {p["position_id"]: p["requires_responsibility_agreement"]
                    for p in rules}
@@ -239,6 +255,82 @@ class TestBanDoTruong(unittest.TestCase):
                      "employer.workplace_institution_name"):
             with self.subTest(bien=bien):
                 self.assertIn(bien, ten)
+
+
+class TestPhatHanhBanThat(unittest.TestCase):
+    """Công tắc chuyển từ bản thử nghiệm sang bản ký thật."""
+
+    def test_cau_hinh_dang_o_che_do_ky_that(self):
+        cach = load_json(ROOT / "config/business_rules.json")["document_issue"]
+        self.assertEqual(cach["mode"], "official")
+        self.assertFalse(ban_thu_nghiem())
+
+    def test_che_do_la_thi_bao_loi(self):
+        """Gõ sai chế độ mà vẫn in ra giấy thì nguy hiểm hơn là dừng lại."""
+        for sai in ({"mode": "thu"}, {}, None):
+            with mock.patch.object(g, "load_json",
+                                   return_value={"document_issue": sai}):
+                with self.assertRaises(ValueError):
+                    ban_thu_nghiem()
+
+    def test_so_hop_dong_theo_ma_nhan_vien(self):
+        self.assertEqual(so_van_ban("BDM", "HDLD", "HTV006"),
+                         "BDM/HDLD/HTV006")
+        self.assertEqual(so_van_ban("GPD", "TT", "HTV010"), "GPD/TT/HTV010")
+
+    def test_thieu_ma_nhan_vien_thi_bao_loi(self):
+        for thieu in ("", "   ", None):
+            with self.assertRaises(ValueError):
+                so_van_ban("BDM", "HDLD", thieu)
+
+    def test_ban_thu_nghiem_van_co_tien_to_demo(self):
+        with mock.patch.object(g, "ban_thu_nghiem", return_value=True):
+            self.assertEqual(so_van_ban("BDM", "HDLD", "HTV006"),
+                             "DEMO/BDM/HDLD/HTV006")
+
+
+@unittest.skipUnless(shutil.which("soffice"), "Cần LibreOffice mới dựng được PDF")
+class TestPdfBanThat(unittest.TestCase):
+    """Dựng PDF thật rồi soi, vì có lỗi chỉ lộ ra ở bước ghép trang.
+
+    Khi bỏ dòng cảnh báo, trang phủ không còn nét vẽ nào nên reportlab
+    không sinh ra trang nào cả, và việc ghép đổ vỡ. Toàn bộ bài kiểm thử
+    khác vẫn đạt vì không bài nào dựng PDF thật.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.thu_muc = Path(tempfile.mkdtemp())
+        cls.pdf = cls.thu_muc / "that.pdf"
+        subprocess.run(
+            [sys.executable, str(ROOT / "generate_demo.py"),
+             "--unit", "dai_duong_xanh",
+             "--input", str(ROOT / "examples/employee_demo.json"),
+             "--output", str(cls.pdf)],
+            cwd=ROOT, check=True, capture_output=True, timeout=300,
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.thu_muc, ignore_errors=True)
+
+    def _chu(self) -> str:
+        from pypdf import PdfReader
+        return "\n".join(
+            (trang.extract_text() or "") for trang in PdfReader(self.pdf).pages
+        )
+
+    def test_ghep_trang_khong_do_vo(self):
+        from pypdf import PdfReader
+        self.assertGreater(len(PdfReader(self.pdf).pages), 1)
+
+    def test_khong_con_dong_canh_bao_tren_bat_ky_trang_nao(self):
+        self.assertNotIn("BẢN THỬ NGHIỆM", self._chu())
+
+    def test_so_hop_dong_khong_con_tien_to_demo(self):
+        chu = self._chu()
+        self.assertNotIn("DEMO/", chu)
+        self.assertIn("/HDLD/", chu)
 
 
 if __name__ == "__main__":

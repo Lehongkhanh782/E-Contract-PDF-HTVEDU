@@ -16,6 +16,7 @@ from app.config import KIT_DIR, TEMPLATE_DIR, salary_policy
 
 # Import sau config vì config đã thêm contract_kit vào sys.path.
 from generate_demo import (  # noqa: E402  (phụ thuộc thứ tự sys.path)
+    ban_thu_nghiem,
     build_context,
     can_thoa_thuan,
     convert_to_pdf,
@@ -161,7 +162,7 @@ def _build_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
         merge_demo_pdf(bo_file, destination, font)
 
     return {
-        "demo_only": True,
+        "demo_only": ban_thu_nghiem(),
         "unit_id": unit_id,
         "calculation": result,
         "position_id": payload["job"]["position_id"],

@@ -66,6 +66,9 @@ function ContractWorkspace({
   onSignedOut: () => void
 }) {
   const [units, setUnits] = useState<Unit[]>([])
+  // Câu nhắc phát hành do máy chủ quyết định, không viết cứng ở đây, để
+  // giao diện không bao giờ nói sai về việc bản in có ký được hay không.
+  const [notice, setNotice] = useState('')
   const [positions, setPositions] = useState<Position[]>([])
   const [form, setForm] = useState<ContractForm>(emptyForm)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
@@ -76,6 +79,7 @@ function ContractWorkspace({
     Promise.all([fetchUnits(), fetchPositions()])
       .then(([unitBody, positionBody]) => {
         setUnits(unitBody.units)
+        setNotice(unitBody.notice)
         setPositions(positionBody.positions)
       })
       .catch((error: Error) => {
@@ -248,10 +252,7 @@ function ContractWorkspace({
           </button>
         </div>
         <Brand />
-        <p className="notice">
-          Bản thử nghiệm. Mọi PDF đều mang dấu <b>DỮ LIỆU GIẢ — CHƯA DÙNG KÝ</b>{' '}
-          và không dùng để ký thật.
-        </p>
+        {notice && <p className="notice">{notice}</p>}
       </header>
 
       {loadError && <p className="alert error">{loadError}</p>}
@@ -509,15 +510,6 @@ function ContractWorkspace({
         </button>
         {showSchedule && (
           <div className="grid">
-            <Field
-              label="Thuế TNCN khấu trừ"
-              inputMode="numeric"
-              hint="Nhập 0 nếu không khấu trừ. Hệ thống không tự suy luận miễn thuế."
-              value={form.compensation.pit_withheld}
-              onChange={(value) =>
-                patch('compensation', { pit_withheld: digitsOnly(value) })
-              }
-            />
             <Field
               label="Căn cứ công đoàn (bên sử dụng lao động)"
               inputMode="numeric"

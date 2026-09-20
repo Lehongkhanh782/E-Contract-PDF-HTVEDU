@@ -32,10 +32,32 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(before["net_income"], after["net_income"])
         self.assertNotEqual(before["employer_total_cost"], after["employer_total_cost"])
 
-    def test_missing_tax_is_not_zero(self):
-        self.data["compensation"]["pit_withheld"] = None
+    def test_tax_supplied_by_hand_is_rejected(self):
+        """Thuế nay do hệ thống tính; nhận số nhập tay là mở đường cho hai
+        cách tính song song, nên phải từ chối thẳng."""
+        self.data["compensation"]["pit_withheld"] = "0"
         with self.assertRaises(ValueError):
             g.calculate_example(self.data, self.policy)
+
+    def test_tax_only_above_threshold(self):
+        """Kế toán chốt: tới ngưỡng thì không khấu trừ, phần vượt chịu 5%."""
+        tinh = g.thue_theo_nguong(self.policy)
+        from decimal import Decimal
+        self.assertEqual(tinh(Decimal("15500000")), Decimal("0"))
+        self.assertEqual(tinh(Decimal("15499999")), Decimal("0"))
+        self.assertEqual(tinh(Decimal("20000000")), Decimal("225000"))
+
+    def test_tax_missing_from_policy_is_an_error(self):
+        thieu = {k: v for k, v in self.policy.items() if k != "pit"}
+        with self.assertRaises(ValueError):
+            g.calculate_example(self.data, thieu)
+
+    def test_net_to_gross_still_exact_above_threshold(self):
+        self.data["compensation"]["salary_mode"] = "net"
+        self.data["compensation"]["salary_amount"] = "20000000"
+        ket_qua = g.calculate_example(self.data, self.policy)
+        self.assertEqual(ket_qua["net_income"], "20000000")
+        self.assertNotEqual(ket_qua["pit_withheld"], "0")
 
     def test_floating_point_input_is_rejected(self):
         self.data["compensation"]["salary_amount"] = 6000000.0

@@ -35,7 +35,6 @@
     "insurance_base": "5310000",
     "employer_union_base": "5310000",
     "employee_union_base": "5310000",
-    "pit_withheld": "0",
     "salary_mode": "net",
     "salary_amount": "6000000"
   },

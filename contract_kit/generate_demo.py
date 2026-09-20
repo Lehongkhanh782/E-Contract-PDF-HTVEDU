@@ -1,8 +1,16 @@
-"""Prototype: structured JSON -> two Word documents -> one watermarked PDF.
+"""Dựng hợp đồng: JSON có cấu trúc -> hai tệp Word -> một tệp PDF.
 
-This program only makes demonstration documents. It has no production
-issuance mode, authentication, OCR, database, contract numbering or legal
-approval workflow. Use the application specification for those components.
+Chế độ phát hành đọc từ config/business_rules.json, khoá document_issue.mode:
+
+- demo: mỗi trang in dòng cảnh báo, số hợp đồng có tiền tố DEMO.
+- official: bản ký thật, không phủ gì lên trang.
+
+Từ 20/09/2026 chạy ở chế độ official, sau khi kế toán xác nhận mức lương
+từng vị trí, tỷ lệ bảo hiểm và công đoàn, cách tính thuế thu nhập cá nhân.
+Số hợp đồng đánh theo mã nhân viên.
+
+Chương trình này vẫn không có phần đăng nhập, đọc giấy tờ, cơ sở dữ liệu
+hay luồng duyệt; những phần đó nằm ở ứng dụng web trong thư mục backend.
 """
 from __future__ import annotations
 
@@ -189,6 +197,30 @@ def can_thoa_thuan(data: dict) -> bool:
     return bool(position["requires_responsibility_agreement"])
 
 
+def thue_theo_nguong(policy: dict):
+    """Trả về hàm tính thuế thu nhập cá nhân khấu trừ theo mức Gross.
+
+    Kế toán chốt: thu nhập tới ngưỡng thì không khấu trừ; phần vượt ngưỡng
+    chịu thuế theo tỷ lệ. Hàm phải nhận Gross làm tham số chứ không tính
+    sẵn một lần, vì phép dò Net-sang-Gross tính lại khấu trừ ở từng mức
+    Gross nó thử.
+    """
+    cau_hinh = policy.get("pit")
+    if not cau_hinh:
+        raise ValueError("Chính sách chưa khai cách tính thuế thu nhập cá nhân")
+    nguong = whole_vnd(cau_hinh.get("threshold"), "pit.threshold")
+    ty_le = decimal_input(cau_hinh.get("rate"), "pit.rate")
+    if ty_le > 1:
+        raise ValueError("Tỷ lệ thuế phải nằm trong khoảng 0 đến 1")
+
+    def tinh(gross):
+        if gross <= nguong:
+            return round_vnd(gross * 0)
+        return round_vnd((gross - nguong) * ty_le)
+
+    return tinh
+
+
 def calculate_example(data: dict, policy: dict) -> dict:
     """Gross/Net demo with explicitly supplied fixed example deductions."""
     if policy.get("status") != "example_only":
@@ -200,24 +232,29 @@ def calculate_example(data: dict, policy: dict) -> dict:
     compensation = data["compensation"]
     if "base_wage" in compensation or "position_allowance" in compensation:
         raise ValueError("Dùng position_id, salary_mode và salary_amount theo schema 1.2")
+    if compensation.get("pit_withheld") not in (None, ""):
+        raise ValueError("Thuế thu nhập cá nhân nay do hệ thống tự tính, "
+                         "không nhận số nhập tay")
     base = selected_position(data)["base_wage"]
     insurance_base = whole_vnd(compensation.get("insurance_base"), "insurance_base")
     employer_union_base = whole_vnd(compensation.get("employer_union_base"), "employer_union_base")
     employee_union_base = whole_vnd(compensation.get("employee_union_base"), "employee_union_base")
-    pit = whole_vnd(compensation.get("pit_withheld"), "pit_withheld")
     rates = {key: decimal_input(value, key) for key, value in policy["rates"].items()}
     if any(rate > 1 for rate in rates.values()):
         raise ValueError("Tỷ lệ minh họa phải nằm trong khoảng 0 đến 1")
-    fixed_example = {
+    tinh_thue = thue_theo_nguong(policy)
+    # Các khoản bảo hiểm và công đoàn tính trên căn cứ đóng nên không đổi
+    # theo Gross; riêng thuế thì có, nên phải tính lại ở từng mức Gross mà
+    # phép dò Net-sang-Gross thử qua.
+    co_dinh = {
         "employer_insurance": round_vnd(insurance_base * rates["employer_insurance"]),
         "employer_union": round_vnd(employer_union_base * rates["employer_union"]),
         "employee_insurance": round_vnd(insurance_base * rates["employee_insurance"]),
         "employee_union": round_vnd(employee_union_base * rates["employee_union"]),
-        "pit_withheld": pit,
     }
     result = calculate_salary_terms(
         base, compensation.get("salary_mode"), compensation.get("salary_amount"),
-        lambda gross: fixed_example)
+        lambda gross: {**co_dinh, "pit_withheld": tinh_thue(gross)})
     # Only this explicit example policy puts the residual into the source
     # template's single allowance line. Production allocation is still pending.
     result["position_allowance"] = result.pop("income_above_base")
@@ -239,6 +276,34 @@ def page_count_label(count: int) -> str:
     if count not in names:
         raise ValueError("Thỏa thuận vượt phạm vi số trang đã kiểm thử")
     return f"{count:02d} ({names[count]})"
+
+
+def ban_thu_nghiem() -> bool:
+    """Bản in có phải bản thử nghiệm không, đọc từ cấu hình nghiệp vụ.
+
+    Để trong cấu hình chứ không để trong biến môi trường, vì đây là quyết
+    định phải nhìn thấy được trong Git: chuyển sang bản ký thật là chuyện
+    cần có người rà lại, không phải chuyện gõ một dòng trên máy chủ.
+    """
+    cach = load_json(ROOT / "config/business_rules.json").get("document_issue")
+    if not cach or cach.get("mode") not in ("demo", "official"):
+        raise ValueError(
+            "Cấu hình chưa khai document_issue.mode là demo hay official"
+        )
+    return cach["mode"] == "demo"
+
+
+def so_van_ban(ma_co_so: str, loai: str, ma_nhan_vien: str) -> str:
+    """Số hợp đồng đánh theo mã nhân viên, theo xác nhận của kế toán.
+
+    Giữ nguyên hai đoạn HDLD và TT vì bài kiểm tra bố cục in hai mặt dựa
+    vào chúng để biết trang nào mở đầu phần nào.
+    """
+    ma_nhan_vien = (ma_nhan_vien or "").strip()
+    if not ma_nhan_vien:
+        raise ValueError("Thiếu mã nhân viên nên không đánh được số hợp đồng")
+    so = f"{ma_co_so}/{loai}/{ma_nhan_vien}"
+    return f"DEMO/{so}" if ban_thu_nghiem() else so
 
 
 def build_context(unit_id: str, data: dict, policy: dict, agreement_pages=3):
@@ -274,7 +339,8 @@ def build_context(unit_id: str, data: dict, policy: dict, agreement_pages=3):
         "work_schedule": copy.deepcopy(data["work_schedule"]),
         "payment": copy.deepcopy(data["payment"]),
         "contract": {
-            "number": f"DEMO/{unit['code']}/HDLD/0001",
+            "number": so_van_ban(unit["code"], "HDLD",
+                                 data["employee"].get("code")),
             "type_term_text": contract["type_term_text"],
             "start_date": date_short(signing_date),
             "end_date": date_short(contract["end_date"]),
@@ -285,7 +351,8 @@ def build_context(unit_id: str, data: dict, policy: dict, agreement_pages=3):
             "effective_to": date_short(data["salary_period"]["effective_to"]),
         },
         "responsibility": {
-            "number": f"DEMO/{unit['code']}/TT/0001",
+            "number": so_van_ban(unit["code"], "TT",
+                                 data["employee"].get("code")),
             "commitment_from": date_short(data["responsibility"]["commitment_from"]),
             "commitment_to": date_short(data["responsibility"]["commitment_to"]),
             "liability_from": date_short(data["responsibility"]["liability_from"]),
@@ -343,6 +410,9 @@ def tach_hop_dong_va_phu_luc(path: Path) -> tuple[list[int], list[int]]:
 
 
 def _dong_danh_dau(overlay, width, height):
+    """In dòng cảnh báo ở đầu trang. Bản ký thật thì không in gì."""
+    if not ban_thu_nghiem():
+        return
     overlay.setFillColorRGB(0.68, 0.05, 0.06)
     overlay.setFont("DemoNotice", 8)
     overlay.drawCentredString(width / 2, height - 16,
@@ -411,11 +481,15 @@ def merge_demo_pdf(paths: list[Path], output: Path, font_path: Path):
                     "Phát hiện trang chỉ trống hoặc chỉ có số trang; kiểm tra mẫu"
                 )
             width, height = float(page.mediabox.width), float(page.mediabox.height)
-            stream = io.BytesIO()
-            overlay = canvas.Canvas(stream, pagesize=(width, height))
-            _dong_danh_dau(overlay, width, height)
-            overlay.save()
-            page.merge_page(PdfReader(io.BytesIO(stream.getvalue())).pages[0])
+            # Bản ký thật không phủ gì lên trang. Không được dựng trang phủ
+            # rỗng rồi ghép: canvas không vẽ gì thì không sinh ra trang nào,
+            # và việc ghép sẽ hỏng.
+            if ban_thu_nghiem():
+                stream = io.BytesIO()
+                overlay = canvas.Canvas(stream, pagesize=(width, height))
+                _dong_danh_dau(overlay, width, height)
+                overlay.save()
+                page.merge_page(PdfReader(io.BytesIO(stream.getvalue())).pages[0])
             writer.add_page(page)
         # Phần cuối không cần đệm: máy in tự để trống mặt sau tờ cuối.
         con_phan_sau = thu_tu < len(phan) - 1

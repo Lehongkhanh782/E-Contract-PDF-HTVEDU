@@ -126,7 +126,6 @@ export type ContractForm = {
     insurance_base: string
     employer_union_base: string
     employee_union_base: string
-    pit_withheld: string
     salary_mode: SalaryMode
     salary_amount: string
   }
@@ -136,12 +135,13 @@ export type ContractForm = {
 
 export type Calculation = {
   base_wage: string
+  /** Hệ thống tự tính theo ngưỡng, không còn là số người dùng nhập. */
+  pit_withheld: string
   position_allowance: string
   gross_income: string
   net_income: string
   employee_insurance: string
   employee_union: string
-  pit_withheld: string
   employer_insurance: string
   employer_union: string
   employer_total_cost: string
