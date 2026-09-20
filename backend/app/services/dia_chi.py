@@ -1,10 +1,22 @@
-"""Viết đầy đủ địa chỉ thay vì viết tắt.
+"""Viết địa chỉ đầy đủ và theo đơn vị hành chính có hiệu lực từ 01/7/2025.
 
 Nhân sự hay gõ tắt: "659, CMT8, P. Hòa hưng, Tphcm". Hợp đồng lao động thì
-phải ghi đầy đủ. Ở đây chỉ mở rộng chữ viết tắt và sửa lại cách viết hoa —
-không thêm thông tin nào mà người dùng chưa gõ, và không tự đoán tên
-phường mới sau sáp nhập, vì đoán sai một cái tên phường trong hợp đồng
-còn tệ hơn để nguyên chữ viết tắt.
+phải ghi đầy đủ và theo tên đơn vị hành chính hiện hành.
+
+Làm bốn việc, theo đúng thứ tự này:
+
+1. Mở rộng chữ viết tắt và sửa cách viết hoa.
+2. Đổi tên tỉnh cũ đã hợp nhất sang tỉnh thành mới.
+3. Tra tên phường xã trong danh mục mới. Không thấy thì tra tiếp bảng xã
+   cũ sang xã mới. Phải theo thứ tự này vì có tên vừa là phường mới có
+   thật, vừa là tên một xã cũ ở nơi khác.
+4. Bỏ cấp quận huyện, chỉ khi đã chắc chắn có phường xã hợp lệ.
+
+Ba bảng dữ liệu đều trích từ văn bản gốc, xem thư mục contract_kit/tools.
+
+Chỗ nào không chắc thì giữ nguyên và nhắc người nhập, chứ không đoán:
+xã cũ bị tách vào nhiều xã mới thì liệt kê các khả năng để người nhập
+chọn, vì đoán sai một cái tên phường là sai giấy tờ.
 """
 from __future__ import annotations
 
@@ -219,6 +231,27 @@ def _bo_cap_tinh(ten: str) -> str:
     return ten
 
 
+@lru_cache(maxsize=1)
+def _bang_sap_nhap_xa() -> dict:
+    """Bảng xã cũ sang xã mới, nạp một lần rồi giữ lại."""
+    from app.config import CONFIG_DIR
+
+    duong_dan = CONFIG_DIR / "phuong_xa_cu_sang_moi.json"
+    if not duong_dan.is_file():
+        return {}
+    return json.loads(duong_dan.read_text(encoding="utf-8"))["bang"]
+
+
+def _bo_cap_bat_ky(ten: str) -> str:
+    """Bỏ mọi tiền tố cấp đơn vị, kể cả cấp quận huyện."""
+    ten = unicodedata.normalize("NFC", ten).strip()
+    for cap in ("Thành phố ", "Thị trấn ", "Thị xã ", "Đặc khu ",
+                "Phường ", "Quận ", "Huyện ", "Tỉnh ", "Xã "):
+        if ten.startswith(cap):
+            return ten[len(cap):].strip()
+    return ten
+
+
 def _bo_tien_to(ten: str) -> str:
     # Về NFC trước khi so, vì chữ lấy từ file Word hay ở dạng tổ hợp.
     ten = unicodedata.normalize("NFC", ten)
@@ -284,17 +317,63 @@ def chuan_hoa(dia_chi: str) -> dict:
             vi_tri_phuong = i
             break
 
+    # Không thấy trong danh mục mới thì tra bảng xã cũ sang xã mới. Phải
+    # theo đúng thứ tự này: có những tên như Hòa Hưng vừa là phường mới có
+    # thật, vừa là tên một xã cũ ở nơi khác.
+    doi_ten_xa = None
+    nhieu_kha_nang: list[dict] = []
+    if vi_tri_phuong is None:
+        bang = _bang_sap_nhap_xa().get(_khong_dau(_bo_cap_bat_ky(
+            danh_muc["ten_tinh"][ma_tinh])), {})
+        # Đoạn mang cấp quận huyện không phải tên phường, chỉ dùng để loại
+        # bớt khả năng. Không tách ra thì "Quận 1" bị tra như xã cũ tên "1".
+        cac_huyen = {
+            _khong_dau(_bo_cap_bat_ky(x))
+            for j, x in enumerate(doan)
+            if j != vi_tri_tinh and x.startswith(CAP_DA_BO)
+        }
+        for i, d in enumerate(doan):
+            if i == vi_tri_tinh or d.startswith(CAP_DA_BO):
+                continue
+            kha_nang = bang.get(_khong_dau(_bo_cap_bat_ky(d)))
+            if not kha_nang:
+                continue
+            thu_hep = [k for k in kha_nang
+                       if _khong_dau(_bo_cap_bat_ky(k["huyen_cu"])) in cac_huyen]
+            chon = thu_hep or kha_nang
+            if len(chon) == 1:
+                doi_ten_xa = (d, chon[0]["xa_moi"])
+                doan[i] = chon[0]["xa_moi"]
+                vi_tri_phuong = i
+            else:
+                nhieu_kha_nang = chon
+            break
+
     nhac: list[str] = []
     if doi_ten_tinh:
         nhac.append(f"Đã đổi \"{doi_ten_tinh}\" thành "
                     f"\"{danh_muc['ten_tinh'][ma_tinh]}\" theo Nghị quyết "
                     "60-NQ/TW về hợp nhất đơn vị hành chính cấp tỉnh.")
+    if doi_ten_xa:
+        nhac.append(f"Đã đổi \"{doi_ten_xa[0]}\" thành \"{doi_ten_xa[1]}\" "
+                    "theo bảng sáp nhập đơn vị hành chính cấp xã.")
+
     if vi_tri_phuong is None:
-        nhac.append(
-            "Không tìm thấy phường xã nào của địa chỉ này trong danh mục "
-            "hành chính từ 01/7/2025. Có thể đây là tên phường cũ đã sáp "
-            "nhập — tra lại rồi sửa cho đúng trước khi in hợp đồng."
-        )
+        if nhieu_kha_nang:
+            # Xã cũ bị tách vào nhiều xã mới; không chọn hộ mà liệt kê ra.
+            ds = "; ".join(f"{k['xa_moi']} (phần thuộc {k['huyen_cu']})"
+                           for k in nhieu_kha_nang[:6])
+            nhac.append(
+                "Phường xã cũ này bị tách vào nhiều đơn vị mới nên không tự "
+                f"đổi được. Các khả năng: {ds}. Chọn đúng nơi rồi sửa lại ô "
+                "địa chỉ."
+            )
+        else:
+            nhac.append(
+                "Không tìm thấy phường xã nào của địa chỉ này trong danh mục "
+                "hành chính từ 01/7/2025. Có thể đây là tên phường cũ đã sáp "
+                "nhập — tra lại rồi sửa cho đúng trước khi in hợp đồng."
+            )
         # Chỉ có tên phường cũ mới cần tra; các lỗi khác không cần link.
         return {"address": ", ".join(doan), "warnings": nhac,
                 "lookup_url": TRANG_TRA_CUU}

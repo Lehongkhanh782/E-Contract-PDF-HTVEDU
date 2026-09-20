@@ -117,28 +117,31 @@ class TestDanhMucHanhChinh(unittest.TestCase):
         self.assertIn("Phường Bình Hưng Hòa", ra["address"])
         self.assertEqual(ra["warnings"], [])
 
-    def test_phuong_cu_da_sap_nhap_thi_nhac_chu_khong_doan(self):
-        """Bến Nghé không còn trong danh mục mới."""
-        ra = chuan_hoa("12 Lê Lợi, Phường Bến Nghé, Quận 1, TP.HCM")
-        self.assertIn("Phường Bến Nghé", ra["address"])
-        self.assertIn("Quận 1", ra["address"])
-        self.assertTrue(any("sáp nhập" in n for n in ra["warnings"]))
+    def test_ten_phuong_la_hoan_toan_thi_nhac_chu_khong_doan(self):
+        """Không có trong cả danh mục mới lẫn bảng sáp nhập thì giữ nguyên."""
+        ra = chuan_hoa("12 Lê Lợi, Phường Không Có Thật, Quận 1, TP.HCM")
+        self.assertIn("Phường Không Có Thật", ra["address"])
+        self.assertTrue(any("Không tìm thấy" in n for n in ra["warnings"]))
 
     def test_khong_bo_quan_huyen_khi_chua_chac_phuong(self):
         """Chưa xác nhận được phường thì giữ nguyên hết, không cắt bớt."""
-        ra = chuan_hoa("12 Lê Lợi, Phường Bến Nghé, Quận 1, TP.HCM")
+        ra = chuan_hoa("12 Lê Lợi, Phường Không Có Thật, Quận 1, TP.HCM")
         self.assertIn("Quận 1", ra["address"])
-        self.assertIn("Phường Bến Nghé", ra["address"])
 
     def test_chi_ghi_quan_ma_khong_ghi_phuong_thi_nhac(self):
-        """Quận Tân Bình không phải phường, dù có Phường Tân Bình mới."""
+        """Đoạn ghi cấp quận huyện không được đem đi tra như tên phường.
+
+        Không tách ra thì "Quận 1" bị tra như xã cũ tên "1" và ra một đống
+        khả năng chẳng liên quan.
+        """
         ra = chuan_hoa("5 Nguyễn Trãi, Quận Tân Bình, TPHCM")
         self.assertIn("Quận Tân Bình", ra["address"])
-        self.assertTrue(any("sáp nhập" in n for n in ra["warnings"]))
+        self.assertTrue(any("Không tìm thấy" in n for n in ra["warnings"]))
+        self.assertFalse(any("tách vào nhiều" in n for n in ra["warnings"]))
 
     def test_kem_link_tra_cuu_khi_phuong_khong_con(self):
         """Nhân sự cần chỗ tra ngay, chứ không chỉ biết là sai."""
-        ra = chuan_hoa("12 Lê Lợi, Phường Bến Nghé, Quận 1, TP.HCM")
+        ra = chuan_hoa("12 Lê Lợi, Phường Không Có Thật, Quận 1, TP.HCM")
         self.assertIn("vnexpress.net", ra["lookup_url"])
 
     def test_dia_chi_dung_thi_khong_kem_link(self):
@@ -261,6 +264,72 @@ class TestFileDanhMuc(unittest.TestCase):
             self.assertTrue(self.goc["don_vi"].get(t["ma"]), t["ten"])
 
 
+class TestDoiPhuongCuSangMoi(unittest.TestCase):
+    """Đổi tên phường xã cũ sang tên mới theo bảng sáp nhập cấp xã."""
+
+    def test_ben_nghe_nay_la_phuong_sai_gon(self):
+        ra = chuan_hoa("12 Lê Lợi, P. Bến Nghé, Quận 1, TP.HCM")
+        self.assertEqual(ra["address"],
+                         "12 Lê Lợi, Phường Sài Gòn, Thành phố Hồ Chí Minh")
+        self.assertTrue(any("sáp nhập đơn vị hành chính cấp xã" in n
+                            for n in ra["warnings"]))
+
+    def test_dung_quan_cu_de_chon_dung_phuong_moi(self):
+        """Phường 13 có ở nhiều quận; Quận 10 mới ra Phường Hòa Hưng."""
+        ra = chuan_hoa("659, CMT8, P. 13, Quận 10, TPHCM")
+        self.assertIn("Phường Hòa Hưng", ra["address"])
+        self.assertNotIn("Phường 13", ra["address"])
+
+    def test_doi_ca_tinh_lan_phuong(self):
+        ra = chuan_hoa("45 Yersin, P. Phú Cường, TP Thủ Dầu Một, Bình Dương")
+        self.assertEqual(
+            ra["address"],
+            "45 Yersin, Phường Thủ Dầu Một, Thành phố Hồ Chí Minh")
+
+    def test_tach_vao_nhieu_noi_thi_khong_doan(self):
+        """Phường 1 của TP.HCM cũ bị tách vào hàng chục phường mới."""
+        ra = chuan_hoa("5 Nguyễn Trãi, Phường 1, TPHCM")
+        self.assertIn("Phường 1", ra["address"])
+        nhac = " ".join(ra["warnings"])
+        self.assertIn("tách vào nhiều đơn vị mới", nhac)
+        self.assertIn("Phường Bàn Cờ", nhac)
+        self.assertIn("vnexpress.net", ra["lookup_url"])
+
+    def test_ten_trung_thi_uu_tien_danh_muc_moi(self):
+        """Hòa Hưng vừa là phường mới có thật, vừa là tên một xã cũ."""
+        ra = chuan_hoa("659, CMT8, P. Hòa hưng, Tphcm")
+        self.assertIn("Phường Hòa Hưng", ra["address"])
+        self.assertEqual(ra["warnings"], [])
+
+
+class TestFileBangSapNhapXa(unittest.TestCase):
+    """Chốt tính toàn vẹn của bảng xã cũ sang xã mới."""
+
+    def setUp(self):
+        import json
+
+        from app.config import CONFIG_DIR
+
+        self.goc = json.loads(
+            (CONFIG_DIR / "phuong_xa_cu_sang_moi.json").read_text(
+                encoding="utf-8")
+        )
+
+    def test_du_so_cap_cu_moi(self):
+        self.assertEqual(self.goc["so_cap_cu_moi"], 10566)
+
+    def test_du_34_tinh_thanh(self):
+        self.assertEqual(len(self.goc["bang"]), 34)
+
+    def test_ghi_ro_nguon_va_luu_y(self):
+        self.assertIn("MAPPING_CU_MOI_CLEAN", self.goc["nguon"])
+        self.assertIn("không chọn hộ", self.goc["luu_y"])
+
+    def test_co_truong_hop_bi_tach_nhieu_noi(self):
+        """Phải còn giữ đủ khả năng thì mới hỏi lại người nhập được."""
+        self.assertGreater(self.goc["so_xa_cu_nhieu_kha_nang"], 0)
+
+
 class TestApiDiaChi(unittest.TestCase):
 
     def test_chua_dang_nhap_thi_bi_chan(self):
@@ -282,9 +351,10 @@ class TestApiDiaChi(unittest.TestCase):
         )
         self.assertEqual(r.json()["warnings"], [])
 
-    def test_tra_ve_loi_nhac_khi_phuong_khong_con(self):
+    def test_tra_ve_loi_nhac_khi_doi_ten_phuong(self):
         r = client.post("/api/address",
                         json={"address": "12 Lê Lợi, P. Bến Nghé, TP.HCM"})
+        self.assertIn("Phường Sài Gòn", r.json()["address"])
         self.assertTrue(r.json()["warnings"])
 
     def test_khong_nhan_truong_la(self):
