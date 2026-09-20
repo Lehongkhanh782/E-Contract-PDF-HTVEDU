@@ -6,6 +6,10 @@ itsdangerous==2.2.0
 pillow==11.1.0
 # Chỉ dùng để ký khóa tài khoản máy; gọi Google Sheets bằng httpx cho nhẹ.
 google-auth==2.38.0
+# google-auth bắt buộc phải có requests mới xin được vé vào cửa: lớp
+# Request của nó nằm trong google.auth.transport.requests và sẽ báo
+# ImportError nếu thiếu. Không thể bỏ để dùng mỗi httpx.
+requests==2.32.3
 httpx==0.28.1
 
 # Các thư viện của phần lõi contract_kit

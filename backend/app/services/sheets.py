@@ -174,6 +174,12 @@ def _giai_thich_loi_ve(loi: Exception) -> str:
             "Dự án chưa bật Google Sheets API. Vào Google Cloud, tìm "
             "\"Google Sheets API\" rồi bấm Enable, đợi khoảng một phút."
         )
+    if "requests library is not installed" in thap:
+        return (
+            "Máy chủ thiếu thư viện requests nên không xin được vé vào cửa. "
+            "Đây là lỗi cài đặt của máy chủ, không phải do khóa hay Sheet: "
+            "cần dựng lại máy chủ sau khi đã thêm requests vào requirements.txt."
+        )
     if "could not deserialize" in thap or "no key" in thap or "asn1" in thap:
         return (
             "Nội dung khóa bị hỏng nên không đọc được. Xóa biến "

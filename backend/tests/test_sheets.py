@@ -333,5 +333,31 @@ class BaTramLeBa(unittest.TestCase):
             '{"status": "PERMISSION_DENIED"}'))
 
 
+class ThuVienDayDu(unittest.TestCase):
+    """Chốt rằng máy chủ có đủ thư viện để xin vé vào cửa của Google.
+
+    Mọi bài khác đều thay tầng mạng bằng dữ liệu giả nên không phát hiện
+    được thiếu thư viện. Bài này nhập thật lớp Request của google-auth —
+    lớp đó nằm trong google.auth.transport.requests và báo ImportError nếu
+    thiếu gói requests, đúng lỗi đã gặp trên máy chủ.
+    """
+
+    def test_co_du_thu_vien_de_xin_ve_vao_cua(self):
+        from google.auth.transport.requests import Request
+        self.assertIsNotNone(Request())
+
+    def test_requests_co_trong_danh_sach_thu_vien(self):
+        import pathlib
+        danh_sach = (pathlib.Path(__file__).resolve().parents[1]
+                     / "requirements.txt").read_text()
+        self.assertRegex(danh_sach, r"(?m)^requests==")
+
+    def test_thieu_thu_vien_thi_noi_ro_la_loi_may_chu(self):
+        cau = sheets._giai_thich_loi_ve(
+            ImportError("The requests library is not installed."))
+        self.assertIn("máy chủ", cau)
+        self.assertIn("requirements.txt", cau)
+
+
 if __name__ == "__main__":
     unittest.main()
