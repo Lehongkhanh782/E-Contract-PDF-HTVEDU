@@ -216,5 +216,122 @@ class TestApi(unittest.TestCase):
         self.assertNotIn("GIA", van_ban.replace("gserviceaccount", ""))
 
 
+KHOA_THAT_GIONG = json.dumps({
+    "type": "service_account",
+    "project_id": "du-an-thu",
+    "private_key_id": "46994d7b0000000000000000000000000000abcd",
+    "client_email": "hop-dong@du-an-thu.iam.gserviceaccount.com",
+    "private_key": "-----BEGIN PRIVATE KEY-----\n"
+                   + "A" * 1600 + "\n-----END PRIVATE KEY-----\n",
+})
+
+
+class SoiKhoa(unittest.TestCase):
+    """Phân biệt được từng kiểu hỏng của phần private_key."""
+
+    def test_khoa_nguyen_ven_thi_dat(self):
+        soi = sheets.soi_khoa(json.loads(KHOA_THAT_GIONG))
+        self.assertTrue(soi["ok"])
+        self.assertEqual(soi["key_id_prefix"], "46994d7b")
+
+    def test_thieu_han_private_key(self):
+        soi = sheets.soi_khoa({"client_email": "a@b.iam.gserviceaccount.com"})
+        self.assertFalse(soi["ok"])
+        self.assertIn("private_key", soi["problem"])
+
+    def test_mat_khoi_pem(self):
+        soi = sheets.soi_khoa({"private_key": "A" * 2000})
+        self.assertFalse(soi["ok"])
+        self.assertIn("BEGIN PRIVATE KEY", soi["problem"])
+
+    def test_xuong_dong_bi_bien_thanh_hai_ky_tu(self):
+        khoa = ("-----BEGIN PRIVATE KEY-----\\n" + "A" * 1600
+                + "\\n-----END PRIVATE KEY-----")
+        soi = sheets.soi_khoa({"private_key": khoa})
+        self.assertFalse(soi["ok"])
+        self.assertIn("xuống dòng", soi["problem"])
+
+    def test_khoa_bi_cat_ngan(self):
+        khoa = "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----"
+        soi = sheets.soi_khoa({"private_key": khoa})
+        self.assertFalse(soi["ok"])
+        self.assertIn("ngắn", soi["problem"])
+
+    def test_khoa_hong_thi_khong_goi_google(self):
+        """Khóa hỏng phải báo ngay, không mất 20 giây chờ mạng."""
+        hong = json.dumps({"type": "service_account", "private_key": "xxx"})
+        with dat_cau_hinh(ECONTRACT_GOOGLE_KEY=hong):
+            sheets.xoa_bo_nho()
+            with self.assertRaises(sheets.LoiSheet):
+                sheets._lay_ve()
+
+    def test_soi_khoa_khong_tra_ve_noi_dung_khoa(self):
+        soi = sheets.soi_khoa(json.loads(KHOA_THAT_GIONG))
+        self.assertNotIn("AAAA", json.dumps(soi))
+
+
+class GiaiThichLoi(unittest.TestCase):
+    """Mỗi nguyên nhân hỏng có một câu hướng dẫn riêng, làm theo được."""
+
+    def test_khoa_bi_thu_hoi(self):
+        cau = sheets._giai_thich_loi_ve(
+            RuntimeError('{"error": "invalid_grant"}'))
+        self.assertIn("thu hồi", cau)
+
+    def test_chua_bat_api(self):
+        cau = sheets._giai_thich_loi_ve(
+            RuntimeError("Google Sheets API has not been used in project"))
+        self.assertIn("Enable", cau)
+
+    def test_khoa_hong_noi_dung(self):
+        cau = sheets._giai_thich_loi_ve(
+            ValueError("Could not deserialize key data"))
+        self.assertIn("dán lại", cau.lower())
+
+    def test_loi_la_van_kem_nguyen_van_de_do(self):
+        cau = sheets._giai_thich_loi_ve(RuntimeError("chuyện lạ chưa gặp"))
+        self.assertIn("chuyện lạ chưa gặp", cau)
+
+
+class ChanDoan(unittest.TestCase):
+
+    def test_hien_du_thong_tin_doi_chieu(self):
+        with dat_cau_hinh(ECONTRACT_GOOGLE_KEY=KHOA_THAT_GIONG,
+                          ECONTRACT_SHEET_ID="abc123"):
+            ket_qua = sheets.chan_doan()
+        self.assertEqual(ket_qua["key_id_prefix"], "46994d7b")
+        self.assertEqual(ket_qua["project"], "du-an-thu")
+        self.assertEqual(ket_qua["sheet_id"], "abc123")
+        self.assertTrue(ket_qua["key_looks_valid"])
+
+    def test_khong_lo_noi_dung_khoa(self):
+        with dat_cau_hinh(ECONTRACT_GOOGLE_KEY=KHOA_THAT_GIONG,
+                          ECONTRACT_SHEET_ID="abc123"):
+            van_ban = json.dumps(sheets.chan_doan())
+        self.assertNotIn("PRIVATE KEY", van_ban)
+        self.assertNotIn("AAAA", van_ban)
+
+
+class BaTramLeBa(unittest.TestCase):
+    """403 có hai nguyên nhân khác hẳn nhau, phải chỉ đúng nguyên nhân."""
+
+    def _goi_voi(self, van_ban: str):
+        phan_hoi = mock.Mock(status_code=403, text=van_ban)
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "_lay_ve", return_value="ve"
+        ), mock.patch("httpx.get", return_value=phan_hoi):
+            with self.assertRaises(sheets.LoiSheet) as bat:
+                sheets._goi("")
+        return str(bat.exception)
+
+    def test_chua_bat_api(self):
+        self.assertIn("Enable", self._goi_voi(
+            '{"status": "SERVICE_DISABLED"}'))
+
+    def test_chua_chia_se_sheet(self):
+        self.assertIn("Chia sẻ", self._goi_voi(
+            '{"status": "PERMISSION_DENIED"}'))
+
+
 if __name__ == "__main__":
     unittest.main()

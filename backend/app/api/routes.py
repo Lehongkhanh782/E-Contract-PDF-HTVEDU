@@ -176,10 +176,7 @@ def sheets_status(_: User = Depends(current_user)) -> dict:
             ),
         }
 
-    ket_qua: dict = {
-        "configured": True,
-        "service_account": sheets.email_tai_khoan_may(),
-    }
+    ket_qua: dict = sheets.chan_doan()
     try:
         ket_qua["tabs"] = sheets.danh_sach_tab()
         du_lieu = sheets.danh_sach_nhan_vien()

@@ -108,6 +108,85 @@ def email_tai_khoan_may() -> str | None:
     return thong_tin.get("client_email")
 
 
+MO_DAU_PEM = "-----BEGIN PRIVATE KEY-----"
+KET_PEM = "-----END PRIVATE KEY-----"
+
+
+def soi_khoa(thong_tin: dict) -> dict[str, Any]:
+    """Xem phần private_key có còn nguyên vẹn không, không lộ nội dung khóa.
+
+    Ô nhập biến môi trường của Render hay nuốt mất dấu xuống dòng trong khối
+    PEM, hoặc biến nó thành hai ký tự \\ và n. Khóa hỏng kiểu đó vẫn là JSON
+    hợp lệ nên phải soi riêng mới thấy.
+    """
+    khoa = thong_tin.get("private_key")
+    ma_khoa = str(thong_tin.get("private_key_id") or "")
+    ket_qua: dict[str, Any] = {
+        # Tám ký tự đầu đủ để đối chiếu xem có đúng khóa mình vừa tạo không,
+        # mà không đủ để ai dùng được.
+        "key_id_prefix": ma_khoa[:8] or None,
+        "ok": False,
+    }
+    if not isinstance(khoa, str) or not khoa.strip():
+        ket_qua["problem"] = "Khóa thiếu hẳn phần private_key."
+        return ket_qua
+    if MO_DAU_PEM not in khoa or KET_PEM not in khoa:
+        ket_qua["problem"] = (
+            "Phần private_key không còn dòng "
+            f"{MO_DAU_PEM}. Dán lại nguyên nội dung file khóa."
+        )
+        return ket_qua
+    if "\\n" in khoa and "\n" not in khoa:
+        ket_qua["problem"] = (
+            "Phần private_key đang là hai ký tự \\ và n thay vì dấu xuống "
+            "dòng thật. Xóa biến ECONTRACT_GOOGLE_KEY rồi dán lại bằng cách "
+            "mở file khóa, chọn hết, sao chép, dán vào ô giá trị."
+        )
+        return ket_qua
+    than = khoa.split(MO_DAU_PEM, 1)[1].split(KET_PEM, 1)[0]
+    if len(than.strip()) < 1000:
+        ket_qua["problem"] = (
+            "Phần private_key ngắn bất thường, nhiều khả năng bị cắt mất. "
+            "Dán lại nguyên nội dung file khóa."
+        )
+        return ket_qua
+    ket_qua["ok"] = True
+    return ket_qua
+
+
+def _giai_thich_loi_ve(loi: Exception) -> str:
+    """Dịch lỗi của Google sang câu người dùng làm theo được."""
+    chi_tiet = " ".join(str(x) for x in loi.args)
+    thap = chi_tiet.lower()
+    if "invalid_grant" in thap:
+        return (
+            "Google báo khóa không còn hiệu lực (invalid_grant). Thường là do "
+            "khóa đã bị thu hồi hoặc tài khoản máy đã bị xóa. Hãy vào Google "
+            "Cloud tạo khóa mới rồi dán lại vào ECONTRACT_GOOGLE_KEY."
+        )
+    if "invalid_client" in thap or "unauthorized_client" in thap:
+        return (
+            "Google không nhận ra tài khoản máy này (invalid_client). Kiểm tra "
+            "lại xem tài khoản máy còn tồn tại trong dự án không."
+        )
+    if "service_disabled" in thap or "has not been used in project" in thap:
+        return (
+            "Dự án chưa bật Google Sheets API. Vào Google Cloud, tìm "
+            "\"Google Sheets API\" rồi bấm Enable, đợi khoảng một phút."
+        )
+    if "could not deserialize" in thap or "no key" in thap or "asn1" in thap:
+        return (
+            "Nội dung khóa bị hỏng nên không đọc được. Xóa biến "
+            "ECONTRACT_GOOGLE_KEY rồi dán lại nguyên văn file khóa."
+        )
+    if "timed out" in thap or "connection" in thap or "resolve" in thap:
+        return "Máy chủ không kết nối được tới Google để xin vé vào cửa."
+    return (
+        "Không dùng được khóa tài khoản máy. Google trả về: "
+        + chi_tiet[:300]
+    )
+
+
 _khoa_ve = threading.Lock()
 _ve: tuple[str, float] | None = None
 
@@ -119,6 +198,9 @@ def _lay_ve() -> str:
         if _ve and _ve[1] > time.time() + 60:
             return _ve[0]
         thong_tin, _, _ = _cau_hinh()
+        soi = soi_khoa(thong_tin)
+        if not soi["ok"]:
+            raise LoiSheet(soi["problem"])
         try:
             from google.oauth2 import service_account
             from google.auth.transport.requests import Request
@@ -128,10 +210,7 @@ def _lay_ve() -> str:
             )
             giay_to.refresh(Request())
         except Exception as loi:
-            raise LoiSheet(
-                "Không dùng được khóa tài khoản máy. Kiểm tra lại nội dung "
-                "khóa và xem đã bật Google Sheets API chưa."
-            ) from loi
+            raise LoiSheet(_giai_thich_loi_ve(loi)) from loi
         han = giay_to.expiry.timestamp() if giay_to.expiry else time.time() + 300
         _ve = (giay_to.token, han)
         return _ve[0]
@@ -152,6 +231,14 @@ def _goi(duong_dan: str, tham_so: dict | None = None) -> dict:
         raise LoiSheet("Không kết nối được tới Google Sheets") from loi
 
     if phan_hoi.status_code == 403:
+        # Cùng mã 403 nhưng hai nguyên nhân khác hẳn nhau: chưa bật API, hay
+        # chưa chia sẻ Sheet. Đọc nội dung trả về mới phân biệt được.
+        if "SERVICE_DISABLED" in phan_hoi.text or "has not been used" in phan_hoi.text:
+            raise LoiSheet(
+                "Dự án chưa bật Google Sheets API. Vào Google Cloud, tìm "
+                "\"Google Sheets API\" rồi bấm Enable, đợi khoảng một phút "
+                "rồi tải lại trang này."
+            )
         raise LoiSheet(
             "Google từ chối truy cập. Hãy mở Sheet, bấm Chia sẻ và thêm email "
             f"{email_tai_khoan_may()} với quyền Editor."
@@ -256,3 +343,22 @@ def xoa_bo_nho() -> None:
         _nho = None
     with _khoa_ve:
         _ve = None
+
+
+def chan_doan() -> dict[str, Any]:
+    """Thông tin để dò lỗi cấu hình, tuyệt đối không kèm nội dung khóa."""
+    try:
+        thong_tin, ma_sheet, tab = _cau_hinh()
+    except ChuaCauHinh as loi:
+        return {"configured": False, "note": str(loi)}
+    soi = soi_khoa(thong_tin)
+    return {
+        "configured": True,
+        "service_account": thong_tin.get("client_email"),
+        "project": thong_tin.get("project_id"),
+        "sheet_id": ma_sheet,
+        "sheet_tab": tab,
+        "key_id_prefix": soi["key_id_prefix"],
+        "key_looks_valid": soi["ok"],
+        **({"key_problem": soi["problem"]} if not soi["ok"] else {}),
+    }
