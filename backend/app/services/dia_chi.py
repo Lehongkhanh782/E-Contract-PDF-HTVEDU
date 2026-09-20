@@ -129,6 +129,12 @@ def _mo_rong_mot_doan(doan: str) -> str:
     return _hoa_dau_tu(" ".join(ra))
 
 
+# Trang tra cứu phường xã sau sáp nhập, để nhân sự bấm vào khi hệ thống
+# không nhận ra tên phường. Chỉ dùng làm chỗ cho người tra bằng mắt; dữ
+# liệu trong hợp đồng vẫn do người nhập quyết định, không lấy tự động từ
+# đây, vì đó không phải nguồn pháp lý.
+TRANG_TRA_CUU = "https://vnexpress.net/tra-cuu-xa-phuong-sau-sap-nhap-4908879.html"
+
 # Cấp quận huyện đã bỏ từ 01/7/2025: địa chỉ mới chỉ còn phường xã và
 # tỉnh thành. Nhận ra các đoạn này để bỏ đi, nhưng chỉ khi đã chắc chắn
 # tìm thấy phường xã hợp lệ trong danh mục chính thức.
@@ -180,14 +186,15 @@ def chuan_hoa(dia_chi: str) -> dict:
     ra thì giữ nguyên mọi thứ và nhắc người dùng kiểm tra, chứ không đoán.
     """
     if not dia_chi or not dia_chi.strip():
-        return {"address": "", "warnings": []}
+        return {"address": "", "warnings": [], "lookup_url": None}
 
     doan = [_mo_rong_mot_doan(d)
             for d in re.split(r"\s*,\s*", dia_chi.strip()) if d.strip()]
     doan = [d for d in doan if d]
     danh_muc = _danh_muc()
     if not danh_muc:
-        return {"address": ", ".join(doan), "warnings": []}
+        return {"address": ", ".join(doan), "warnings": [],
+                "lookup_url": None}
 
     # Tỉnh thành thường ở đoạn cuối; không có thì không quy chiếu được.
     ma_tinh = None
@@ -202,6 +209,7 @@ def chuan_hoa(dia_chi: str) -> dict:
             "address": ", ".join(doan),
             "warnings": ["Chưa nhận ra tỉnh thành nên không đối chiếu được "
                          "với danh mục hành chính mới."],
+            "lookup_url": None,
         }
 
     trong_tinh = danh_muc["don_vi"][ma_tinh]
@@ -218,9 +226,11 @@ def chuan_hoa(dia_chi: str) -> dict:
         nhac.append(
             "Không tìm thấy phường xã nào của địa chỉ này trong danh mục "
             "hành chính từ 01/7/2025. Có thể đây là tên phường cũ đã sáp "
-            "nhập — kiểm tra lại trước khi in hợp đồng."
+            "nhập — tra lại rồi sửa cho đúng trước khi in hợp đồng."
         )
-        return {"address": ", ".join(doan), "warnings": nhac}
+        # Chỉ có tên phường cũ mới cần tra; các lỗi khác không cần link.
+        return {"address": ", ".join(doan), "warnings": nhac,
+                "lookup_url": TRANG_TRA_CUU}
 
     # Đã chắc chắn có phường xã hợp lệ thì mới bỏ cấp quận huyện.
     giu = []
@@ -230,4 +240,4 @@ def chuan_hoa(dia_chi: str) -> dict:
                         "01/7/2025.")
             continue
         giu.append(d)
-    return {"address": ", ".join(giu), "warnings": nhac}
+    return {"address": ", ".join(giu), "warnings": nhac, "lookup_url": None}

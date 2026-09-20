@@ -60,7 +60,12 @@ export function fetchEmployees() {
   return getJson<EmployeeList>('/api/employees')
 }
 
-export type TidyAddress = { address: string; warnings: string[] }
+export type TidyAddress = {
+  address: string
+  warnings: string[]
+  /** Trang tra cứu phường xã sau sáp nhập, có khi cần tra tay. */
+  lookup_url?: string | null
+}
 
 /**
  * Viết đầy đủ địa chỉ và quy về danh mục hành chính từ 01/7/2025.
@@ -77,7 +82,11 @@ export async function tidyAddress(address: string): Promise<TidyAddress> {
     })
     if (!r.ok) return { address, warnings: [] }
     const body = (await r.json()) as TidyAddress
-    return { address: body.address || address, warnings: body.warnings ?? [] }
+    return {
+      address: body.address || address,
+      warnings: body.warnings ?? [],
+      lookup_url: body.lookup_url ?? null,
+    }
   } catch {
     return { address, warnings: [] }
   }

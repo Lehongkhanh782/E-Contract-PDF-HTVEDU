@@ -65,6 +65,7 @@ export default function ProbationForm({
   const [hieuTruong, setHieuTruong] = useState<Record<string, string>>({})
   // Lời nhắc về địa chỉ, ví dụ tên phường không còn trong danh mục mới.
   const [nhacDiaChi, setNhacDiaChi] = useState<string[]>([])
+  const [linkTraCuu, setLinkTraCuu] = useState<string | null>(null)
 
   useEffect(() => {
     fetchPrincipals()
@@ -161,6 +162,7 @@ export default function ProbationForm({
       patch('employee', { permanent_address: ket_qua.address })
     }
     setNhacDiaChi(ket_qua.warnings)
+    setLinkTraCuu(ket_qua.lookup_url ?? null)
   }
 
   async function taiVe() {
@@ -296,6 +298,13 @@ export default function ProbationForm({
             {nhacDiaChi.map((n) => (
               <p key={n}>{n}</p>
             ))}
+            {linkTraCuu && (
+              <p>
+                <a href={linkTraCuu} target="_blank" rel="noreferrer">
+                  Mở trang tra cứu phường xã sau sáp nhập
+                </a>
+              </p>
+            )}
           </div>
         )}
       </Section>

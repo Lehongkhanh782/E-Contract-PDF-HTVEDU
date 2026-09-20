@@ -125,6 +125,19 @@ class TestDanhMucHanhChinh(unittest.TestCase):
         self.assertIn("Quận Tân Bình", ra["address"])
         self.assertTrue(any("sáp nhập" in n for n in ra["warnings"]))
 
+    def test_kem_link_tra_cuu_khi_phuong_khong_con(self):
+        """Nhân sự cần chỗ tra ngay, chứ không chỉ biết là sai."""
+        ra = chuan_hoa("12 Lê Lợi, Phường Bến Nghé, Quận 1, TP.HCM")
+        self.assertIn("vnexpress.net", ra["lookup_url"])
+
+    def test_dia_chi_dung_thi_khong_kem_link(self):
+        self.assertIsNone(chuan_hoa("P. Hòa Hưng, TPHCM")["lookup_url"])
+
+    def test_bo_quan_huyen_thi_khong_kem_link(self):
+        """Đây không phải lỗi của người nhập nên không cần tra."""
+        ra = chuan_hoa("số 7, P. Củ Chi, huyện Củ Chi, tphcm")
+        self.assertIsNone(ra["lookup_url"])
+
     def test_khong_nhan_ra_tinh_thi_nhac(self):
         ra = chuan_hoa("12 Lê Lợi, Phường Nào Đó")
         self.assertTrue(any("tỉnh thành" in n for n in ra["warnings"]))

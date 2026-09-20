@@ -73,6 +73,7 @@ function ContractWorkspace({
   const [notice, setNotice] = useState('')
   // Lời nhắc về địa chỉ, ví dụ tên phường không còn trong danh mục mới.
   const [nhacDiaChi, setNhacDiaChi] = useState<string[]>([])
+  const [linkTraCuu, setLinkTraCuu] = useState<string | null>(null)
   // Hai loại hợp đồng dùng hai biểu mẫu khác hẳn nhau nên tách hẳn ra,
   // thay vì nhét thêm nhánh if vào biểu mẫu chính thức.
   const [loaiHopDong, setLoaiHopDong] = useState<'chinh_thuc' | 'thu_viec'>(
@@ -225,6 +226,7 @@ function ContractWorkspace({
       patch('employee', { permanent_address: ket_qua.address })
     }
     setNhacDiaChi(ket_qua.warnings)
+    setLinkTraCuu(ket_qua.lookup_url ?? null)
   }
 
   async function runDownload() {
@@ -460,6 +462,13 @@ function ContractWorkspace({
             {nhacDiaChi.map((n) => (
               <p key={n}>{n}</p>
             ))}
+            {linkTraCuu && (
+              <p>
+                <a href={linkTraCuu} target="_blank" rel="noreferrer">
+                  Mở trang tra cứu phường xã sau sáp nhập
+                </a>
+              </p>
+            )}
           </div>
         )}
       </Section>
