@@ -92,7 +92,25 @@ def _hoa_dau_tu(cum: str) -> str:
     return " ".join(ra)
 
 
-def _mo_rong_mot_doan(doan: str) -> str:
+def _hoa_mot_tu(tu: str) -> str:
+    """Viết hoa một từ đứng giữa đoạn, giữ nguyên từ vốn đã viết hoa hết."""
+    if not tu:
+        return tu
+    if tu.isupper() and len(tu) > 1:
+        return tu
+    if _khong_dau(tu) in TU_THUONG:
+        return tu.lower()
+    return tu[0].upper() + tu[1:]
+
+
+def _mo_rong_mot_doan(doan: str, cho_phep_tinh: bool = True) -> str:
+    """Viết đầy đủ một đoạn của địa chỉ.
+
+    cho_phep_tinh=False dùng cho phần còn lại sau khi đã bóc chữ Phường
+    hay Xã: nếu vẫn tra tên tỉnh thành ở đó thì "Phường Sài Gòn" sẽ thành
+    "Phường Thành phố Hồ Chí Minh", vì Sài Gòn là tên gọi khác của thành
+    phố mà cũng là tên một phường có thật.
+    """
     doan = re.sub(r"\s+", " ", doan).strip(" ,.")
     if not doan:
         return ""
@@ -102,7 +120,7 @@ def _mo_rong_mot_doan(doan: str) -> str:
     # Thành phố Hồ Chí Minh".
     gon = _khong_dau(doan).replace(".", " ")
     gon = re.sub(r"\s+", " ", gon).strip()
-    if gon in TINH_THANH:
+    if cho_phep_tinh and gon in TINH_THANH:
         return TINH_THANH[gon]
 
     # Cấp hành chính ở đầu đoạn: "P.10", "P 10", "Q. Tân Bình", "X Hòa Bình".
@@ -111,22 +129,31 @@ def _mo_rong_mot_doan(doan: str) -> str:
     )
     if khop and _khong_dau(khop.group(1)) in CAP_HANH_CHINH:
         cap = CAP_HANH_CHINH[_khong_dau(khop.group(1))]
-        return f"{cap} {_mo_rong_mot_doan(khop.group(2))}".strip()
+        con_lai = _mo_rong_mot_doan(khop.group(2), cho_phep_tinh=False)
+        return f"{cap} {con_lai}".strip()
 
     # Cấp hành chính viết thường nhưng đủ chữ: "phường hòa hưng".
     for viet_tat, day_du in CAP_HANH_CHINH.items():
         dau = _khong_dau(day_du) + " "
         if _khong_dau(doan).startswith(dau):
-            con_lai = doan[len(day_du):].strip()
-            return f"{day_du} {_mo_rong_mot_doan(con_lai)}".strip()
+            con_lai = _mo_rong_mot_doan(doan[len(day_du):].strip(),
+                                        cho_phep_tinh=False)
+            return f"{day_du} {con_lai}".strip()
 
     # Viết tắt tên riêng, xét theo từng từ để không đụng vào từ khác.
-    tu = doan.split(" ")
-    ra = []
-    for t in tu:
+    # Chữ mở rộng ra đã đúng chính tả sẵn nên không viết hoa lại: "ql"
+    # thành "Quốc lộ" chứ không phải "Quốc Lộ".
+    ra: list[str] = []
+    da_co_chu = False
+    for t in doan.split(" "):
         sach = _khong_dau(t).strip(".,")
-        ra.append(TU_VIET_TAT[sach] if sach in TU_VIET_TAT else t)
-    return _hoa_dau_tu(" ".join(ra))
+        if sach in TU_VIET_TAT:
+            ra.append(TU_VIET_TAT[sach])
+            da_co_chu = True
+        else:
+            ra.append(_hoa_dau_tu(t) if not da_co_chu and not ra
+                      else _hoa_mot_tu(t))
+    return " ".join(x for x in ra if x)
 
 
 # Trang tra cứu phường xã sau sáp nhập, để nhân sự bấm vào khi hệ thống
@@ -138,7 +165,9 @@ TRANG_TRA_CUU = "https://vnexpress.net/tra-cuu-xa-phuong-sau-sap-nhap-4908879.ht
 # Cấp quận huyện đã bỏ từ 01/7/2025: địa chỉ mới chỉ còn phường xã và
 # tỉnh thành. Nhận ra các đoạn này để bỏ đi, nhưng chỉ khi đã chắc chắn
 # tìm thấy phường xã hợp lệ trong danh mục chính thức.
-CAP_DA_BO = ("Quận", "Huyện", "Thị xã")
+# Gồm cả "Thành phố" vì thành phố thuộc tỉnh cũng là cấp huyện; đoạn
+# mang tên tỉnh thành được giữ riêng nên không bị nhầm.
+CAP_DA_BO = ("Quận", "Huyện", "Thị xã", "Thành phố")
 
 
 @lru_cache(maxsize=1)
@@ -156,12 +185,38 @@ def _danh_muc() -> dict:
         # Tra theo tên đã bỏ dấu và bỏ chữ Phường/Xã/Thị trấn ở đầu, để
         # người gõ "P. Củ Chi" vẫn tìm ra "Xã Củ Chi".
         theo_tinh[ma] = {_khong_dau(_bo_tien_to(t)): t for t in ds}
+    tra_tinh = {_khong_dau(t["ten"]): t["ma"] for t in goc["tinh_thanh"]}
+    # Tên tỉnh thành không kèm chữ "Tỉnh"/"Thành phố" cũng phải tra ra.
+    for t in goc["tinh_thanh"]:
+        tra_tinh.setdefault(_khong_dau(_bo_cap_tinh(t["ten"])), t["ma"])
+
+    # Tỉnh cũ đã hợp nhất: quy về tỉnh thành mới. Ví dụ Bình Dương và Bà
+    # Rịa - Vũng Tàu nay thuộc Thành phố Hồ Chí Minh.
+    cu_sang_moi: dict[str, str] = {}
+    hop_nhat = CONFIG_DIR / "sap_nhap_tinh.json"
+    if hop_nhat.is_file():
+        bang = json.loads(hop_nhat.read_text(encoding="utf-8"))
+        for cu, moi in bang["tinh_cu_sang_moi"].items():
+            ma = tra_tinh.get(_khong_dau(_bo_cap_tinh(moi)))
+            # Chỉ nhận khi tên mới khớp đúng một tỉnh trong danh mục.
+            if ma and _khong_dau(_bo_cap_tinh(cu)) not in tra_tinh:
+                cu_sang_moi[_khong_dau(_bo_cap_tinh(cu))] = ma
+
     return {
-        "tinh": {_khong_dau(t["ten"]): t["ma"] for t in goc["tinh_thanh"]},
+        "tinh": tra_tinh,
+        "tinh_cu": cu_sang_moi,
         "ten_tinh": {t["ma"]: t["ten"] for t in goc["tinh_thanh"]},
         "don_vi": theo_tinh,
         "nguon": goc["nguon"],
     }
+
+
+def _bo_cap_tinh(ten: str) -> str:
+    ten = unicodedata.normalize("NFC", ten).strip()
+    for cap in ("Thành phố ", "thành phố ", "Tỉnh ", "tỉnh "):
+        if ten.startswith(cap):
+            return ten[len(cap):].strip()
+    return ten
 
 
 def _bo_tien_to(ten: str) -> str:
@@ -198,10 +253,18 @@ def chuan_hoa(dia_chi: str) -> dict:
 
     # Tỉnh thành thường ở đoạn cuối; không có thì không quy chiếu được.
     ma_tinh = None
+    vi_tri_tinh = None
+    doi_ten_tinh = None
     for i in range(len(doan) - 1, -1, -1):
-        ma = danh_muc["tinh"].get(_khong_dau(doan[i]))
+        khoa = _khong_dau(_bo_cap_tinh(doan[i]))
+        ma = danh_muc["tinh"].get(_khong_dau(doan[i])) or danh_muc["tinh"].get(khoa)
+        if not ma:
+            ma = danh_muc["tinh_cu"].get(khoa)
+            if ma:
+                doi_ten_tinh = doan[i]
         if ma:
             ma_tinh = ma
+            vi_tri_tinh = i
             doan[i] = danh_muc["ten_tinh"][ma]
             break
     if not ma_tinh:
@@ -222,6 +285,10 @@ def chuan_hoa(dia_chi: str) -> dict:
             break
 
     nhac: list[str] = []
+    if doi_ten_tinh:
+        nhac.append(f"Đã đổi \"{doi_ten_tinh}\" thành "
+                    f"\"{danh_muc['ten_tinh'][ma_tinh]}\" theo Nghị quyết "
+                    "60-NQ/TW về hợp nhất đơn vị hành chính cấp tỉnh.")
     if vi_tri_phuong is None:
         nhac.append(
             "Không tìm thấy phường xã nào của địa chỉ này trong danh mục "
@@ -235,7 +302,7 @@ def chuan_hoa(dia_chi: str) -> dict:
     # Đã chắc chắn có phường xã hợp lệ thì mới bỏ cấp quận huyện.
     giu = []
     for i, d in enumerate(doan):
-        if i != vi_tri_phuong and d.startswith(CAP_DA_BO):
+        if i not in (vi_tri_phuong, vi_tri_tinh) and d.startswith(CAP_DA_BO):
             nhac.append(f"Đã bỏ \"{d}\" vì cấp quận huyện không còn từ "
                         "01/7/2025.")
             continue

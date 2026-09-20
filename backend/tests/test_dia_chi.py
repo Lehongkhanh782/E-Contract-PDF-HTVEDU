@@ -31,7 +31,8 @@ class TestVietDayDu(unittest.TestCase):
         )
         self.assertEqual(
             viet_day_du("x. Hòa bình, h. Trà ôn, Vĩnh Long"),
-            "Xã Hòa Bình, Huyện Trà Ôn, Vĩnh Long",
+            # Huyện Trà Ôn bị bỏ vì cấp huyện không còn.
+            "Xã Hòa Bình, Tỉnh Vĩnh Long",
         )
 
     def test_phuong_quan_co_so(self):
@@ -72,8 +73,18 @@ class TestVietDayDu(unittest.TestCase):
             self.assertEqual(viet_day_du(xau), "")
 
     def test_chu_la_thi_giu_nguyen_chu_khong_bia(self):
+        """Phần địa chỉ không phải đơn vị hành chính thì không đụng tới."""
+        # Hậu Giang nay thuộc thành phố Cần Thơ theo Nghị quyết 60-NQ/TW.
         self.assertEqual(viet_day_du("Ấp Bảy Ngàn, Hậu Giang"),
-                         "Ấp Bảy Ngàn, Hậu Giang")
+                         "Ấp Bảy Ngàn, Thành phố Cần Thơ")
+        self.assertEqual(viet_day_du("CC Sky Garden, Hẻm 12"),
+                         "Chung cư Sky Garden, Hẻm 12")
+
+    def test_chu_mo_rong_khong_bi_viet_hoa_lai(self):
+        """"ql" ra "Quốc lộ" chứ không phải "Quốc Lộ"."""
+        self.assertEqual(viet_day_du("QL 1A, X. Bình Mỹ, Vĩnh Long"),
+                         "Quốc lộ 1A, Xã Bình Mỹ, Tỉnh Vĩnh Long")
+        self.assertIn("Khu dân cư", viet_day_du("KDC Bình Hưng, HCM"))
 
     def test_thua_dau_phay_va_khoang_trang(self):
         self.assertEqual(viet_day_du("  12  Lê Lợi ,, Q.1 ,  "),
@@ -147,6 +158,80 @@ class TestDanhMucHanhChinh(unittest.TestCase):
                   "17 Bùi Huy Bích, phường Phú Định, TPHCM",
                   "1/4 Đường số 33, P. An Khánh, TP HCM"):
             self.assertEqual(chuan_hoa(x)["warnings"], [], x)
+
+
+class TestHopNhatTinh(unittest.TestCase):
+    """Tỉnh cũ đã hợp nhất thì quy về tỉnh thành mới.
+
+    Bảng hợp nhất lấy từ Nghị quyết 60-NQ/TW, phần phụ lục.
+    """
+
+    def test_binh_duong_nay_thuoc_thanh_pho_ho_chi_minh(self):
+        ra = chuan_hoa("12 Lê Lợi, Phường Thủ Dầu Một, Bình Dương")
+        self.assertIn("Thành phố Hồ Chí Minh", ra["address"])
+        self.assertNotIn("Bình Dương", ra["address"])
+        self.assertTrue(any("60-NQ/TW" in n for n in ra["warnings"]))
+
+    def test_ba_ria_vung_tau_nay_thuoc_thanh_pho_ho_chi_minh(self):
+        ra = chuan_hoa("ấp 3, Xã Long Điền, Bà Rịa - Vũng Tàu")
+        self.assertIn("Thành phố Hồ Chí Minh", ra["address"])
+
+    def test_tra_vinh_nay_thuoc_vinh_long(self):
+        ra = chuan_hoa("số 9, Xã Cầu Kè, Trà Vinh")
+        self.assertIn("Vĩnh Long", ra["address"])
+
+    def test_tinh_khong_sap_nhap_thi_giu_nguyen(self):
+        ra = chuan_hoa("12 Lê Lợi, Phường Đông Hà, Tỉnh Quảng Ninh")
+        self.assertIn("Quảng Ninh", ra["address"])
+        self.assertFalse(any("60-NQ/TW" in n for n in ra["warnings"]))
+
+    def test_bo_ca_cap_thanh_pho_thuoc_tinh(self):
+        """Thành phố thuộc tỉnh cũng là cấp huyện, cũng không còn."""
+        ra = chuan_hoa("12 Lê Lợi, Phường Thủ Dầu Một, TP Thủ Dầu Một, "
+                       "Bình Dương")
+        self.assertNotIn("Thành phố Thủ Dầu Một", ra["address"])
+        self.assertTrue(ra["address"].endswith("Thành phố Hồ Chí Minh"))
+
+    def test_khong_xoa_nham_doan_ten_tinh_thanh(self):
+        """Tên tỉnh cũng bắt đầu bằng "Thành phố" nên phải được giữ lại."""
+        ra = chuan_hoa("659, P. Hòa Hưng, Thành phố Hồ Chí Minh")
+        self.assertIn("Thành phố Hồ Chí Minh", ra["address"])
+
+    def test_phuong_sai_gon_khong_bi_nham_thanh_ten_thanh_pho(self):
+        """Sài Gòn vừa là tên gọi khác của thành phố, vừa là tên một phường."""
+        ra = chuan_hoa("1 Lê Duẩn, P. Sài Gòn, TPHCM")
+        self.assertEqual(ra["address"],
+                         "1 Lê Duẩn, Phường Sài Gòn, Thành phố Hồ Chí Minh")
+        self.assertEqual(ra["warnings"], [])
+
+
+class TestFileHopNhatTinh(unittest.TestCase):
+    """Chốt tính toàn vẹn của bảng hợp nhất trích từ nghị quyết."""
+
+    def setUp(self):
+        import json
+
+        from app.config import CONFIG_DIR
+
+        self.goc = json.loads(
+            (CONFIG_DIR / "sap_nhap_tinh.json").read_text(encoding="utf-8")
+        )
+
+    def test_23_truong_hop_hop_nhat_va_11_tinh_giu_nguyen(self):
+        self.assertEqual(self.goc["so_truong_hop_hop_nhat"], 23)
+        self.assertEqual(len(self.goc["tinh_giu_nguyen"]), 11)
+        self.assertEqual(
+            self.goc["so_truong_hop_hop_nhat"] + len(self.goc["tinh_giu_nguyen"]),
+            34,
+        )
+
+    def test_ghi_ro_nguon(self):
+        self.assertIn("60-NQ/TW", self.goc["nguon"])
+
+    def test_co_truong_hop_cua_nha_truong(self):
+        m = self.goc["tinh_cu_sang_moi"]
+        self.assertEqual(m["Bình Dương"], "Thành phố Hồ Chí Minh")
+        self.assertEqual(m["Bà Rịa - Vũng Tàu"], "Thành phố Hồ Chí Minh")
 
 
 class TestFileDanhMuc(unittest.TestCase):
