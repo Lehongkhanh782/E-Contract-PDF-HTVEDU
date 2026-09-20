@@ -138,9 +138,12 @@ def build_probation_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
 
 
 def _build_probation_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
+    # Kiểm tra cơ sở, ngày và tỷ lệ thử việc trước khi đòi các công cụ dựng
+    # PDF. Nhờ vậy dữ liệu không hợp lệ luôn trả lỗi 400 rõ ràng, kể cả trên
+    # máy chỉ chạy API/kiểm thử và chưa cài LibreOffice.
+    context, result = build_probation_context(unit_id, payload)
     soffice = _soffice()
     font = _font()
-    context, result = build_probation_context(unit_id, payload)
     template = TEMPLATE_DIR / "Hop_dong_thu_viec_template.docx"
 
     with tempfile.TemporaryDirectory(prefix="econtract_") as folder:
