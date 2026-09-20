@@ -49,10 +49,19 @@ export default function EmployeePicker({
   const [danh_sach, setDanhSach] = useState<SheetEmployee[] | null>(null)
   const [tim, setTim] = useState('')
   const [loi, setLoi] = useState<string | null>(null)
+  // Chọn xong thì thu hộp lại; bấm vào ô tìm mới sổ ra.
+  const [dangMo, setDangMo] = useState(false)
+  const [daChon, setDaChon] = useState<SheetEmployee | null>(null)
+  // Sheet có những cột nào. Cần biết để lúc chọn người mới thì xóa đúng
+  // các ô mà Sheet phụ trách, không đụng vào ô Sheet không có.
+  const [cotCoTrongSheet, setCotCoTrongSheet] = useState<string[]>([])
 
   useEffect(() => {
     fetchEmployees()
-      .then((r) => setDanhSach(r.employees))
+      .then((r) => {
+        setDanhSach(r.employees)
+        setCotCoTrongSheet(Object.keys(r.columns ?? {}))
+      })
       .catch((e: Error) => {
         setDanhSach([])
         // 503 nghĩa là chưa nối Sheet, không phải lỗi cần báo động.
@@ -84,28 +93,40 @@ export default function EmployeePicker({
     // Chỉ mời tới nhóm chưa rõ cơ sở khi đang tìm, hoặc khi cơ sở này chưa
     // có ai — để danh sách thường ngày không bị lẫn.
     const them = q || chinh.length === 0 ? loc(chua_ro_co_so) : []
-    return { chinh: chinh.slice(0, 8), them: them.slice(0, 5) }
+    // Hộp chỉ cao bằng 5 dòng rồi cuộn, nên đưa ra nhiều hơn 5 cũng được.
+    return { chinh: chinh.slice(0, 50), them: them.slice(0, 20) }
   }, [cung_co_so, chua_ro_co_so, tim])
 
-  // Đổi cơ sở thì bỏ chữ đang tìm, để không còn kết quả của cơ sở trước.
-  useEffect(() => setTim(''), [unitId])
+  // Đổi cơ sở thì bỏ chữ đang tìm và thu hộp, để không còn kết quả cũ.
+  useEffect(() => {
+    setTim('')
+    setDangMo(false)
+  }, [unitId])
 
   if (danh_sach === null) return null
   if (danh_sach.length === 0 && !loi) return null
 
   function chon(nv: SheetEmployee) {
+    // Ô nào Sheet phụ trách thì luôn ghi đè, kể cả khi người này bỏ trống ô
+    // đó: để trống rồi tô đỏ vẫn hơn là giữ lại dữ liệu của người vừa chọn
+    // trước đó, vì như vậy hợp đồng in ra lẫn thông tin của hai người.
+    // Ô Sheet không có cột (quốc tịch, nơi cấp) thì không đụng tới.
     const dien: Partial<ContractForm['employee']> = {}
-    if (nv.full_name) dien.full_name = nv.full_name
-    if (nv.code) dien.code = nv.code
-    if (nv.gender) dien.gender = nv.gender
-    if (nv.nationality) dien.nationality = nv.nationality
-    if (nv.identity_number) dien.identity_number = nv.identity_number.replace(/\D/g, '')
-    if (nv.identity_issuer) dien.identity_issuer = nv.identity_issuer
-    if (nv.permanent_address) dien.permanent_address = nv.permanent_address
-    const sinh = doiNgay(nv.birth_date)
-    if (sinh) dien.birth_date = sinh
-    const cap = doiNgay(nv.identity_issue_date)
-    if (cap) dien.identity_issue_date = cap
+    const ghi = (
+      truong: keyof ContractForm['employee'],
+      gia_tri: string | undefined,
+    ) => {
+      if (cotCoTrongSheet.includes(truong)) dien[truong] = gia_tri ?? ''
+    }
+    ghi('full_name', nv.full_name)
+    ghi('code', nv.code)
+    ghi('gender', nv.gender)
+    ghi('nationality', nv.nationality)
+    ghi('identity_number', nv.identity_number?.replace(/\D/g, ''))
+    ghi('identity_issuer', nv.identity_issuer)
+    ghi('permanent_address', nv.permanent_address)
+    ghi('birth_date', doiNgay(nv.birth_date))
+    ghi('identity_issue_date', doiNgay(nv.identity_issue_date))
 
     // Máy chủ đã quy chức vụ và cơ sở về đúng tên trong cấu hình. Nếu máy
     // chủ chưa nhận ra thì thử đối chiếu thẳng tên chức vụ ở đây.
@@ -119,6 +140,8 @@ export default function EmployeePicker({
     }
     onPick(dien, position_id, nv.unit_id ?? null)
     setTim('')
+    setDaChon(nv)
+    setDangMo(false)
   }
 
   return (
@@ -130,11 +153,24 @@ export default function EmployeePicker({
         <>
           <input
             type="search"
-            placeholder="Gõ tên hoặc mã nhân viên…"
+            placeholder={
+              daChon ? 'Bấm để chọn người khác…' : 'Gõ tên hoặc mã nhân viên…'
+            }
             value={tim}
             disabled={disabled}
-            onChange={(e) => setTim(e.target.value)}
+            onFocus={() => setDangMo(true)}
+            onChange={(e) => {
+              setTim(e.target.value)
+              setDangMo(true)
+            }}
           />
+          {daChon && !dangMo && (
+            <p className="hint da-chon">
+              Đã chọn: <b>{daChon.full_name}</b>
+              {daChon.code ? ` · ${daChon.code}` : ''}
+            </p>
+          )}
+          {dangMo && (
           <ul className="sheet-list">
             {ket_qua.chinh.map((nv, i) => (
               <li key={`${nv.code ?? ''}-${i}`}>
@@ -176,6 +212,8 @@ export default function EmployeePicker({
               </>
             )}
           </ul>
+          )}
+          {dangMo && (
           <p className="hint">
             Đang hiện {cung_co_so.length} người của{' '}
             {unitName ? <b>{unitName}</b> : 'cơ sở đang chọn'}, lấy từ Google
@@ -183,6 +221,7 @@ export default function EmployeePicker({
             toàn hệ thống). Sheet có thể cũ hoặc thiếu — vẫn phải đọc lại
             từng ô.
           </p>
+          )}
         </>
       )}
     </div>

@@ -98,7 +98,8 @@ export default function ProbationForm({
       job: {
         ...cu.job,
         position_id,
-        department: vi_tri?.department ?? cu.job.department,
+        // Bỏ chọn vị trí thì bộ phận cũng trống theo, vì nó suy ra từ vị trí.
+        department: position_id ? (vi_tri?.department ?? '') : '',
       },
     }))
   }
@@ -198,7 +199,9 @@ export default function ProbationForm({
           disabled={dangBan}
           onPick={(fields, positionId, unitId) => {
             patch('employee', fields as Partial<Form['employee']>)
-            if (positionId) chonChucDanh(positionId)
+            // Không có chức vụ thì xóa cả vị trí lẫn bộ phận công tác, chứ
+            // không để lại của người vừa chọn trước đó.
+            chonChucDanh(positionId ?? '')
             if (unitId && units.some((u) => u.unit_id === unitId)) {
               chonCoSo(unitId)
             }

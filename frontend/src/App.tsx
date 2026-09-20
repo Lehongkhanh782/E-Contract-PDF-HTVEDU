@@ -364,7 +364,10 @@ function ContractWorkspace({
           disabled={busy}
           onPick={(fields, positionId, unitId) => {
             patch('employee', fields)
-            if (positionId) choosePosition(positionId)
+            // Người mới không có chức vụ trên Sheet thì xóa vị trí đang
+            // chọn, để ô đỏ lên. Giữ lại vị trí của người trước là tính
+            // nhầm lương cơ sở cho người này.
+            choosePosition(positionId ?? '')
             // Chỉ đổi cơ sở sang cơ sở mà tài khoản này được phép làm.
             if (unitId && units.some((unit) => unit.unit_id === unitId)) {
               setTop('unit_id', unitId)

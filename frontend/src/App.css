@@ -529,3 +529,14 @@ table.calc tr.phu td {
     background: #2a1416;
   }
 }
+
+/* Hộp chọn nhân viên: cao bằng 5 dòng rồi cuộn, để biểu mẫu không bị đẩy
+   dài ra khi Sheet có hàng chục người. */
+.sheet-list {
+  max-height: 13.5rem;
+  overflow-y: auto;
+}
+.sheet-box .da-chon {
+  margin-top: 0.4rem;
+  color: var(--brand-dark);
+}
