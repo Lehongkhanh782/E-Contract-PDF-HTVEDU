@@ -30,10 +30,15 @@ function doiNgay(gia_tri: string | undefined): string | undefined {
  */
 export default function EmployeePicker({
   positions,
+  unitId,
+  unitName,
   onPick,
   disabled,
 }: {
   positions: Position[]
+  /** Cơ sở đang chọn ở mục 1; danh sách chỉ hiện người của cơ sở này. */
+  unitId: string
+  unitName?: string
   onPick: (
     nhan_vien: Partial<ContractForm['employee']>,
     position_id: string | null,
@@ -55,16 +60,35 @@ export default function EmployeePicker({
       })
   }, [])
 
+  // Mỗi cơ sở là một pháp nhân riêng, nên chỉ hiện người của cơ sở đang
+  // chọn. Người mà Sheet ghi mã trường lạ thì xếp riêng chứ không bỏ hẳn,
+  // để không ai bị mất khỏi danh sách vì một ô ghi sai.
+  const cung_co_so = useMemo(
+    () => (danh_sach ?? []).filter((nv) => nv.unit_id === unitId),
+    [danh_sach, unitId],
+  )
+  const chua_ro_co_so = useMemo(
+    () => (danh_sach ?? []).filter((nv) => !nv.unit_id),
+    [danh_sach],
+  )
+
   const ket_qua = useMemo(() => {
-    if (!danh_sach) return []
     const q = khongDau(tim)
-    if (!q) return danh_sach.slice(0, 8)
-    return danh_sach
-      .filter((nv) =>
-        khongDau(`${nv.full_name ?? ''} ${nv.code ?? ''}`).includes(q),
-      )
-      .slice(0, 8)
-  }, [danh_sach, tim])
+    const loc = (ds: SheetEmployee[]) =>
+      q
+        ? ds.filter((nv) =>
+            khongDau(`${nv.full_name ?? ''} ${nv.code ?? ''}`).includes(q),
+          )
+        : ds
+    const chinh = loc(cung_co_so)
+    // Chỉ mời tới nhóm chưa rõ cơ sở khi đang tìm, hoặc khi cơ sở này chưa
+    // có ai — để danh sách thường ngày không bị lẫn.
+    const them = q || chinh.length === 0 ? loc(chua_ro_co_so) : []
+    return { chinh: chinh.slice(0, 8), them: them.slice(0, 5) }
+  }, [cung_co_so, chua_ro_co_so, tim])
+
+  // Đổi cơ sở thì bỏ chữ đang tìm, để không còn kết quả của cơ sở trước.
+  useEffect(() => setTim(''), [unitId])
 
   if (danh_sach === null) return null
   if (danh_sach.length === 0 && !loi) return null
@@ -112,7 +136,7 @@ export default function EmployeePicker({
             onChange={(e) => setTim(e.target.value)}
           />
           <ul className="sheet-list">
-            {ket_qua.map((nv, i) => (
+            {ket_qua.chinh.map((nv, i) => (
               <li key={`${nv.code ?? ''}-${i}`}>
                 <button type="button" disabled={disabled} onClick={() => chon(nv)}>
                   <b>{nv.full_name}</b>
@@ -121,13 +145,43 @@ export default function EmployeePicker({
                 </button>
               </li>
             ))}
-            {ket_qua.length === 0 && (
-              <li className="hint">Không tìm thấy ai khớp.</li>
+            {ket_qua.chinh.length === 0 && (
+              <li className="hint">
+                {tim
+                  ? 'Không tìm thấy ai khớp ở cơ sở này.'
+                  : 'Cơ sở này chưa có ai trong Google Sheet.'}
+              </li>
+            )}
+            {ket_qua.them.length > 0 && (
+              <>
+                <li className="hint sheet-group">
+                  Sheet chưa ghi rõ cơ sở — kiểm tra lại cột Ma_Truong trước
+                  khi chọn:
+                </li>
+                {ket_qua.them.map((nv, i) => (
+                  <li key={`khac-${nv.code ?? ''}-${i}`}>
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => chon(nv)}
+                    >
+                      <b>{nv.full_name}</b>
+                      {nv.code ? <span className="hint"> · {nv.code}</span> : null}
+                      {nv.position ? (
+                        <span className="hint"> · {nv.position}</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </>
             )}
           </ul>
           <p className="hint">
-            Lấy từ Google Sheet dùng chung với ứng dụng nhân sự ({danh_sach.length}{' '}
-            người). Sheet có thể cũ hoặc thiếu — vẫn phải đọc lại từng ô.
+            Đang hiện {cung_co_so.length} người của{' '}
+            {unitName ? <b>{unitName}</b> : 'cơ sở đang chọn'}, lấy từ Google
+            Sheet dùng chung với ứng dụng nhân sự ({danh_sach.length} người
+            toàn hệ thống). Sheet có thể cũ hoặc thiếu — vẫn phải đọc lại
+            từng ô.
           </p>
         </>
       )}

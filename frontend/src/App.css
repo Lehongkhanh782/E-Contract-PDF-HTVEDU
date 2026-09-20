@@ -496,3 +496,11 @@ table.calc tr.phu td {
   background: var(--brand-soft);
   border-color: var(--brand);
 }
+
+/* Nhóm "chưa rõ cơ sở" trong danh sách chọn nhân viên: tách hẳn ra để
+   không ai bấm nhầm tưởng là người của cơ sở đang chọn. */
+.sheet-list .sheet-group {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--gold);
+}

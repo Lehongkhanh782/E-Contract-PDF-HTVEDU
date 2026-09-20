@@ -325,6 +325,8 @@ function ContractWorkspace({
       >
         <EmployeePicker
           positions={positions}
+          unitId={form.unit_id}
+          unitName={selectedUnit?.display_name}
           disabled={busy}
           onPick={(fields, positionId, unitId) => {
             patch('employee', fields)
