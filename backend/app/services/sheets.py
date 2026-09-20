@@ -53,16 +53,25 @@ TEN_COT = {
     "permanent_address": ("noi thuong tru", "dia chi thuong tru", "thuong tru",
                           "dia chi", "address"),
     "position": ("chuc vu", "vi tri", "chuc danh", "position", "job title"),
-    "unit": ("co so", "don vi", "truong", "unit", "chi nhanh"),
+    "unit": ("co so", "don vi", "truong", "ma truong", "unit", "chi nhanh"),
+    "status": ("trang thai", "tinh trang", "status"),
 }
+
+# Các trường chỉ dùng để lọc/đối chiếu, không đổ thẳng vào biểu mẫu.
+TRUONG_PHU = ("status",)
 
 
 def _khong_dau(chuoi: str) -> str:
+    """Bỏ dấu, viết thường, và coi gạch dưới/gạch ngang như khoảng trắng.
+
+    Ứng dụng nhân sự đặt tên cột kiểu Ho_Ten, Ngay_Sinh; không quy về
+    "ho ten", "ngay sinh" thì không cột nào khớp cả.
+    """
     bo = "".join(
         c for c in unicodedata.normalize("NFD", str(chuoi).lower())
         if unicodedata.category(c) != "Mn"
     )
-    return re.sub(r"\s+", " ", bo).strip()
+    return re.sub(r"[\s_\-]+", " ", bo).strip()
 
 
 def _cau_hinh() -> tuple[dict, str, str | None]:
@@ -276,7 +285,7 @@ def chon_tab(cac_tab: list[str]) -> str:
     """Chọn tab nhiều khả năng chứa danh sách nhân viên nhất."""
     if not cac_tab:
         raise LoiSheet("Sheet này không có tab nào")
-    sach = {ten: _khong_dau(ten).replace("_", " ") for ten in cac_tab}
+    sach = {ten: _khong_dau(ten) for ten in cac_tab}
     # Trùng khít tên trước, rồi mới tới tên có chứa từ khóa, để "NHAN_SU"
     # được chọn thay vì "LICH_SU_NHAN_SU" nếu Sheet có cả hai.
     for ten_mau in TEN_TAB_NHAN_SU:
@@ -370,6 +379,27 @@ def danh_sach_nhan_vien(lam_moi: bool = False) -> dict[str, Any]:
         _nho = (nhan_vien, cot, tieu_de, tab, time.time())
     return {"employees": nhan_vien, "columns": cot,
             "headers": tieu_de, "tab": tab, "cached": False}
+
+
+def gia_tri_khac_nhau(nhan_vien: list[dict], truong: str,
+                      toi_da: int = 40) -> list[str] | None:
+    """Liệt kê các giá trị khác nhau của một cột, để đối chiếu với cấu hình.
+
+    Chỉ dùng cho cột phân loại như cơ sở, chức vụ, trạng thái — tuyệt đối
+    không dùng cho cột chứa thông tin cá nhân như họ tên hay số giấy tờ.
+    """
+    if truong not in TEN_COT or truong in ("full_name", "identity_number",
+                                           "birth_date", "permanent_address",
+                                           "code"):
+        return None
+    thay: list[str] = []
+    for nv in nhan_vien:
+        gia_tri = (nv.get(truong) or "").strip()
+        if gia_tri and gia_tri not in thay:
+            thay.append(gia_tri)
+            if len(thay) >= toi_da:
+                break
+    return sorted(thay)
 
 
 def xoa_bo_nho() -> None:

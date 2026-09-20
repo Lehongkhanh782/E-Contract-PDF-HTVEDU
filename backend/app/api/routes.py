@@ -186,6 +186,14 @@ def sheets_status(_: User = Depends(current_user)) -> dict:
             "headers": du_lieu["headers"],
             "columns": du_lieu["columns"],
             "employee_count": len(du_lieu["employees"]),
+            # Giá trị thật của các cột phân loại, để đối chiếu với cấu hình
+            # cơ sở và vị trí. Không kèm thông tin cá nhân của ai.
+            "unit_values": sheets.gia_tri_khac_nhau(
+                du_lieu["employees"], "unit"),
+            "position_values": sheets.gia_tri_khac_nhau(
+                du_lieu["employees"], "position"),
+            "status_values": sheets.gia_tri_khac_nhau(
+                du_lieu["employees"], "status"),
         })
     except sheets.LoiSheet as loi:
         ket_qua.update({"connected": False, "error": str(loi)})

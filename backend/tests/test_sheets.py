@@ -435,5 +435,91 @@ class LoiThieuCotHoTen(unittest.TestCase):
         self.assertIn("ECONTRACT_SHEET_TAB", self._loi())
 
 
+# Đúng dòng tiêu đề của tab NHAN_SU trong Sheet đang dùng thật.
+TIEU_DE_THAT = [
+    "Ma_Nhan_Vien", "Ho_Ten", "Ngay_Sinh", "Gioi_Tinh", "CCCD",
+    "So_Dien_Thoai", "Email", "Phong_Ban", "Chuc_Vu", "Ngay_Vao_Lam",
+    "Trang_Thai", "Anh_Dai_Dien", "Ma_Nguoi_Duyet", "Ma_Truong", "Dia_Chi",
+    "Trinh_Do", "Lien_He_Khan_Cap", "Ngay_Thu_Viec", "Ngay_Het_Thu_Viec",
+    "Ngay_Chinh_Thuc", "Trang_Thai_HD", "Luong_Gross", "Miễn chấm công",
+    "Ngay_Cap_CCCD",
+]
+
+
+class TieuDeThat(unittest.TestCase):
+    """Bám đúng cách đặt tên cột của ứng dụng nhân sự: Ho_Ten, Ngay_Sinh…"""
+
+    def setUp(self):
+        self.cot = sheets.doan_cot(TIEU_DE_THAT)
+
+    def test_nhan_ra_cac_cot_chinh(self):
+        mong_doi = {
+            "code": "Ma_Nhan_Vien",
+            "full_name": "Ho_Ten",
+            "birth_date": "Ngay_Sinh",
+            "gender": "Gioi_Tinh",
+            "identity_number": "CCCD",
+            "identity_issue_date": "Ngay_Cap_CCCD",
+            "position": "Chuc_Vu",
+            "unit": "Ma_Truong",
+            "permanent_address": "Dia_Chi",
+            "status": "Trang_Thai",
+        }
+        thuc_te = {t: TIEU_DE_THAT[i] for t, i in self.cot.items()}
+        self.assertEqual(thuc_te, mong_doi)
+
+    def test_ngay_cap_cccd_khong_bi_nham_sang_so_cccd(self):
+        self.assertNotEqual(self.cot["identity_number"],
+                            self.cot["identity_issue_date"])
+
+    def test_trang_thai_khong_bi_nham_sang_trang_thai_hd(self):
+        self.assertEqual(TIEU_DE_THAT[self.cot["status"]], "Trang_Thai")
+
+    def test_cot_sheet_khong_co_thi_bo_trong_chu_khong_doan_bua(self):
+        """Sheet không có Nơi cấp và Quốc tịch; phải để người dùng tự nhập."""
+        self.assertNotIn("identity_issuer", self.cot)
+        self.assertNotIn("nationality", self.cot)
+
+    def test_gach_duoi_duoc_coi_nhu_khoang_trang(self):
+        self.assertEqual(sheets._khong_dau("Ho_Ten"), "ho ten")
+        self.assertEqual(sheets._khong_dau("Ngay-Sinh"), "ngay sinh")
+
+
+class GiaTriKhacNhau(unittest.TestCase):
+    """Liệt kê giá trị cột phân loại, nhưng không được lộ thông tin cá nhân."""
+
+    NHAN_VIEN = [
+        {"full_name": "Nguyễn Thị Minh An", "unit": "VST",
+         "position": "Giáo viên", "status": "Đang làm"},
+        {"full_name": "Trần Văn Bốn", "unit": "PANDA",
+         "position": "Bảo mẫu", "status": "Đang làm"},
+        {"full_name": "Lê Thị Năm", "unit": "VST",
+         "position": "Giáo viên", "status": "Nghỉ việc"},
+    ]
+
+    def test_gom_cac_gia_tri_khong_trung(self):
+        self.assertEqual(
+            sheets.gia_tri_khac_nhau(self.NHAN_VIEN, "unit"),
+            ["PANDA", "VST"])
+
+    def test_liet_ke_duoc_trang_thai(self):
+        self.assertEqual(
+            sheets.gia_tri_khac_nhau(self.NHAN_VIEN, "status"),
+            ["Nghỉ việc", "Đang làm"])
+
+    def test_tu_choi_cot_co_thong_tin_ca_nhan(self):
+        for truong in ("full_name", "identity_number", "birth_date",
+                       "permanent_address", "code"):
+            self.assertIsNone(
+                sheets.gia_tri_khac_nhau(self.NHAN_VIEN, truong), truong)
+
+    def test_tu_choi_truong_la(self):
+        self.assertIsNone(sheets.gia_tri_khac_nhau(self.NHAN_VIEN, "luong"))
+
+    def test_khong_liet_ke_qua_dai(self):
+        nhieu = [{"unit": f"CS{i}"} for i in range(200)]
+        self.assertEqual(len(sheets.gia_tri_khac_nhau(nhieu, "unit")), 40)
+
+
 if __name__ == "__main__":
     unittest.main()
