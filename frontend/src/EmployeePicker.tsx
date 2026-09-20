@@ -37,6 +37,7 @@ export default function EmployeePicker({
   onPick: (
     nhan_vien: Partial<ContractForm['employee']>,
     position_id: string | null,
+    unit_id: string | null,
   ) => void
   disabled?: boolean
 }) {
@@ -82,16 +83,17 @@ export default function EmployeePicker({
     const cap = doiNgay(nv.identity_issue_date)
     if (cap) dien.identity_issue_date = cap
 
-    // Chức vụ trên Sheet là chữ; đối chiếu với danh sách vị trí đã cấu hình.
-    let position_id: string | null = null
-    if (nv.position) {
+    // Máy chủ đã quy chức vụ và cơ sở về đúng tên trong cấu hình. Nếu máy
+    // chủ chưa nhận ra thì thử đối chiếu thẳng tên chức vụ ở đây.
+    let position_id: string | null = nv.position_id ?? null
+    if (!position_id && nv.position) {
       const muc = khongDau(nv.position)
       const khop = positions.find(
         (p) => khongDau(p.title) === muc || khongDau(p.role_label) === muc,
       )
       position_id = khop ? khop.position_id : null
     }
-    onPick(dien, position_id)
+    onPick(dien, position_id, nv.unit_id ?? null)
     setTim('')
   }
 

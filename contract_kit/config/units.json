@@ -30,7 +30,11 @@
       "liability_amount": "20000000",
       "liability_amount_source": "user_confirmation_2026-09-19",
       "workplace_institution_name": "Trường Mầm non Song ngữ Vườn Sáng Tạo",
-      "workplace_address": "17 Bùi Huy Bích, phường Phú Định, Thành phố Hồ Chí Minh"
+      "workplace_address": "17 Bùi Huy Bích, phường Phú Định, Thành phố Hồ Chí Minh",
+      "hr_sheet_codes": [
+        "VST"
+      ],
+      "hr_sheet_codes_source": "sheet_NHAN_SU_2026-09-20"
     },
     {
       "unit_id": "victoria",
@@ -61,7 +65,12 @@
       "liability_amount": "20000000",
       "liability_amount_source": "user_confirmation_2026-09-19",
       "workplace_institution_name": "Trường Mầm non Ngôi Nhà Ánh Dương",
-      "workplace_address": "1/4 Đường số 33, Phường An Khánh, Thành phố Hồ Chí Minh"
+      "workplace_address": "1/4 Đường số 33, Phường An Khánh, Thành phố Hồ Chí Minh",
+      "hr_sheet_codes": [
+        "VIC",
+        "NAD"
+      ],
+      "hr_sheet_codes_source": "sheet_NHAN_SU_2026-09-20"
     },
     {
       "unit_id": "gau_panda",
@@ -92,7 +101,12 @@
       "liability_amount": "10000000",
       "liability_amount_source": "user_confirmation_2026-09-19",
       "workplace_institution_name": "Trường Mầm non Gấu Panda",
-      "workplace_address": "946/6 Tân Kỳ Tân Quý, Phường Bình Hưng Hoà, Thành phố Hồ Chí Minh."
+      "workplace_address": "946/6 Tân Kỳ Tân Quý, Phường Bình Hưng Hoà, Thành phố Hồ Chí Minh.",
+      "hr_sheet_codes": [
+        "GPD",
+        "GP"
+      ],
+      "hr_sheet_codes_source": "sheet_NHAN_SU_2026-09-20"
     },
     {
       "unit_id": "dai_duong_xanh",
@@ -124,7 +138,12 @@
       "liability_amount": "20000000",
       "liability_amount_source": "user_confirmation_2026-09-19",
       "workplace_institution_name": "Trường Mầm non Đại Dương Xanh",
-      "workplace_address": "02-04 Đường số 34, Phường An Lạc, Thành phố Hồ Chí Minh, Việt Nam."
+      "workplace_address": "02-04 Đường số 34, Phường An Lạc, Thành phố Hồ Chí Minh, Việt Nam.",
+      "hr_sheet_codes": [
+        "BDM",
+        "DDX"
+      ],
+      "hr_sheet_codes_source": "sheet_NHAN_SU_2026-09-20"
     }
   ]
 }

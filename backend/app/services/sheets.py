@@ -372,13 +372,69 @@ def danh_sach_nhan_vien(lam_moi: bool = False) -> dict[str, Any]:
             truong: str(dong[i]).strip() if i < len(dong) else ""
             for truong, i in cot.items()
         }
-        if ban_ghi.get("full_name"):
-            nhan_vien.append(ban_ghi)
+        if not ban_ghi.get("full_name"):
+            continue
+        if not con_lam_viec(ban_ghi.get("status")):
+            continue
+        # Quy mã cơ sở và chức vụ về đúng tên trong cấu hình hợp đồng; không
+        # khớp thì để trống cho người dùng tự chọn.
+        ban_ghi["unit_id"] = doi_ma_don_vi(ban_ghi.get("unit"))
+        ban_ghi["position_id"] = doi_chuc_vu(ban_ghi.get("position"))
+        nhan_vien.append(ban_ghi)
 
     with _khoa_nho:
         _nho = (nhan_vien, cot, tieu_de, tab, time.time())
     return {"employees": nhan_vien, "columns": cot,
             "headers": tieu_de, "tab": tab, "cached": False}
+
+
+# Trạng thái cho biết người đó đã nghỉ. So khớp không dấu, viết thường.
+TRANG_THAI_DA_NGHI = ("nghi viec", "da nghi", "thoi viec", "nghi", "ngung",
+                      "inactive", "resigned", "terminated")
+
+
+def con_lam_viec(trang_thai: str | None) -> bool:
+    """Bỏ trống hoặc không nhận ra thì coi như còn làm, để không mất người."""
+    if not trang_thai:
+        return True
+    gon = _khong_dau(trang_thai)
+    return not any(dau in gon for dau in TRANG_THAI_DA_NGHI)
+
+
+def doi_ma_don_vi(gia_tri: str | None) -> str | None:
+    """Đổi mã cơ sở trên Sheet thành unit_id trong cấu hình hợp đồng."""
+    if not gia_tri:
+        return None
+    from app import config
+
+    gon = _khong_dau(gia_tri)
+    for don_vi in config.units():
+        ung_vien = [don_vi.get("code"), don_vi.get("display_name"),
+                    don_vi.get("workplace_institution_name")]
+        ung_vien += don_vi.get("hr_sheet_codes") or []
+        if any(x and _khong_dau(x) == gon for x in ung_vien):
+            return don_vi["unit_id"]
+    return None
+
+
+def doi_chuc_vu(gia_tri: str | None) -> str | None:
+    """Đổi chức vụ trên Sheet thành position_id trong cấu hình hợp đồng.
+
+    Không khớp thì trả None để người dùng tự chọn, chứ không gán bừa một vị
+    trí — mỗi vị trí kéo theo mức lương cơ sở và việc có phải ký thỏa thuận
+    trách nhiệm hay không.
+    """
+    if not gia_tri:
+        return None
+    from app import config
+
+    gon = _khong_dau(gia_tri)
+    for vi_tri in config.positions():
+        ung_vien = [vi_tri.get("title"), vi_tri.get("role_label")]
+        ung_vien += vi_tri.get("hr_sheet_titles") or []
+        if any(x and _khong_dau(x) == gon for x in ung_vien):
+            return vi_tri["position_id"]
+    return None
 
 
 def gia_tri_khac_nhau(nhan_vien: list[dict], truong: str,

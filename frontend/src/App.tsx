@@ -326,9 +326,13 @@ function ContractWorkspace({
         <EmployeePicker
           positions={positions}
           disabled={busy}
-          onPick={(fields, positionId) => {
+          onPick={(fields, positionId, unitId) => {
             patch('employee', fields)
             if (positionId) choosePosition(positionId)
+            // Chỉ đổi cơ sở sang cơ sở mà tài khoản này được phép làm.
+            if (unitId && units.some((unit) => unit.unit_id === unitId)) {
+              setTop('unit_id', unitId)
+            }
           }}
         />
         <IdCardReader

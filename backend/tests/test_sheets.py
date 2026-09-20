@@ -521,5 +521,114 @@ class GiaTriKhacNhau(unittest.TestCase):
         self.assertEqual(len(sheets.gia_tri_khac_nhau(nhieu, "unit")), 40)
 
 
+class DoiMaCoSo(unittest.TestCase):
+    """Sheet ghi mã trường, hợp đồng dùng unit_id; phải nối đúng bốn cơ sở."""
+
+    def test_dung_bon_ma_co_that_tren_sheet(self):
+        self.assertEqual(
+            {m: sheets.doi_ma_don_vi(m)
+             for m in ("VST", "GP", "NAD", "DDX")},
+            {"VST": "vuon_sang_tao", "GP": "gau_panda",
+             "NAD": "victoria", "DDX": "dai_duong_xanh"},
+        )
+
+    def test_nad_la_victoria(self):
+        """Ngôi Nhà Ánh Dương là nơi làm việc của pháp nhân Victoria."""
+        self.assertEqual(sheets.doi_ma_don_vi("NAD"), "victoria")
+
+    def test_ma_trong_cau_hinh_van_dung_duoc(self):
+        self.assertEqual(sheets.doi_ma_don_vi("VIC"), "victoria")
+        self.assertEqual(sheets.doi_ma_don_vi("BDM"), "dai_duong_xanh")
+
+    def test_goi_bang_ten_day_du_cung_duoc(self):
+        self.assertEqual(sheets.doi_ma_don_vi("Gấu Panda"), "gau_panda")
+
+    def test_ma_la_thi_de_trong_chu_khong_doan(self):
+        for xau in ("XYZ", "", None, "Trường nào đó"):
+            self.assertIsNone(sheets.doi_ma_don_vi(xau), xau)
+
+
+class DoiChucVu(unittest.TestCase):
+    """Bốn chức vụ đã cấu hình phải nhận ra; sáu chức vụ còn lại để trống."""
+
+    KHOP = {
+        "Hiệu Trưởng": "principal",
+        "Giáo viên Mầm non": "preschool_teacher",
+        "Giáo viên Tiếng Anh": "english_teacher",
+        "Bảo mẫu": "nanny",
+    }
+    CHUA_CAU_HINH = ("Bảo vệ", "Cấp Dưỡng", "Hành chính",
+                     "Hành chính bán trú", "Phụ bếp - Tạp vụ", "Trưởng Phòng")
+
+    def test_nhan_ra_chuc_vu_da_cau_hinh(self):
+        for ten, mong_doi in self.KHOP.items():
+            self.assertEqual(sheets.doi_chuc_vu(ten), mong_doi, ten)
+
+    def test_chuc_vu_chua_cau_hinh_thi_de_trong(self):
+        """Gán bừa vị trí là gán sai lương cơ sở và sai thỏa thuận trách
+        nhiệm, nên thà để trống cho người dùng tự chọn."""
+        for ten in self.CHUA_CAU_HINH:
+            self.assertIsNone(sheets.doi_chuc_vu(ten), ten)
+
+    def test_khong_phan_biet_hoa_thuong(self):
+        self.assertEqual(sheets.doi_chuc_vu("HIỆU TRƯỞNG"), "principal")
+
+
+class ConLamViec(unittest.TestCase):
+
+    def test_dang_lam_thi_giu_lai(self):
+        self.assertTrue(sheets.con_lam_viec("DANG_LAM"))
+
+    def test_da_nghi_thi_loai_ra(self):
+        for x in ("NGHI_VIEC", "Nghỉ việc", "Đã nghỉ", "Thôi việc"):
+            self.assertFalse(sheets.con_lam_viec(x), x)
+
+    def test_khong_ro_thi_giu_lai_cho_chac(self):
+        """Thà hiện dư một người còn hơn làm mất người đang làm việc."""
+        for x in ("", None, "Tạm hoãn", "abc"):
+            self.assertTrue(sheets.con_lam_viec(x), x)
+
+
+class QuyVeCauHinh(unittest.TestCase):
+    """Danh sách trả về phải kèm sẵn unit_id và position_id."""
+
+    def setUp(self):
+        sheets.xoa_bo_nho()
+
+    def _chay(self, o):
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "_doc_o", return_value=("NHAN_SU", o)
+        ):
+            return sheets.danh_sach_nhan_vien(lam_moi=True)["employees"]
+
+    def test_kem_unit_id_va_position_id(self):
+        o = [["Ho_Ten", "Ma_Truong", "Chuc_Vu", "Trang_Thai"],
+             ["Nguyễn Thị Minh An", "NAD", "Giáo viên Tiếng Anh", "DANG_LAM"]]
+        nv = self._chay(o)[0]
+        self.assertEqual(nv["unit_id"], "victoria")
+        self.assertEqual(nv["position_id"], "english_teacher")
+
+    def test_giu_nguyen_chu_goc_de_doi_chieu(self):
+        o = [["Ho_Ten", "Ma_Truong", "Chuc_Vu"],
+             ["Trần Văn Bốn", "GP", "Bảo mẫu"]]
+        nv = self._chay(o)[0]
+        self.assertEqual(nv["unit"], "GP")
+        self.assertEqual(nv["position"], "Bảo mẫu")
+
+    def test_chua_cau_hinh_thi_de_trong(self):
+        o = [["Ho_Ten", "Ma_Truong", "Chuc_Vu"],
+             ["Lê Thị Năm", "VST", "Bảo vệ"]]
+        nv = self._chay(o)[0]
+        self.assertEqual(nv["unit_id"], "vuon_sang_tao")
+        self.assertIsNone(nv["position_id"])
+
+    def test_nguoi_da_nghi_khong_hien_ra(self):
+        o = [["Ho_Ten", "Trang_Thai"],
+             ["Người đang làm", "DANG_LAM"],
+             ["Người đã nghỉ", "NGHI_VIEC"]]
+        ten = [nv["full_name"] for nv in self._chay(o)]
+        self.assertEqual(ten, ["Người đang làm"])
+
+
 if __name__ == "__main__":
     unittest.main()

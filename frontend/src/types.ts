@@ -10,6 +10,11 @@ export type SheetEmployee = {
   permanent_address?: string
   position?: string
   unit?: string
+  status?: string
+  /** Máy chủ đã quy mã cơ sở của Sheet về đúng cơ sở trong cấu hình. */
+  unit_id?: string | null
+  /** Máy chủ đã quy chức vụ của Sheet về đúng vị trí trong cấu hình. */
+  position_id?: string | null
 }
 
 export type EmployeeList = {
