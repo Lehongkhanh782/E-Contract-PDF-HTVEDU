@@ -8,6 +8,7 @@ from __future__ import annotations
 import shutil
 import unittest
 from copy import deepcopy
+from unittest import mock
 
 from tests import logged_in_client
 
@@ -165,6 +166,92 @@ class TestThoiHan(unittest.TestCase):
 
     def test_thang_hai_ngan_ngay_van_tron(self):
         self.assertEqual(self._thang("2026-02-01", "2026-02-28"), "1 tháng")
+
+
+class TestBoPhanCongTac(unittest.TestCase):
+    """Bộ phận công tác suy ra từ chức danh, không bắt nhân sự gõ."""
+
+    GIAO_VIEN = ("preschool_teacher", "english_teacher", "nanny")
+
+    def setUp(self):
+        body = client.get("/api/positions").json()["positions"]
+        self.theo_vi_tri = {p["position_id"]: p["department"] for p in body}
+
+    def test_day_va_trong_tre_thuoc_bo_phan_giao_vien(self):
+        for vi_tri in self.GIAO_VIEN:
+            self.assertEqual(self.theo_vi_tri[vi_tri], "Giáo viên", vi_tri)
+
+    def test_cac_vi_tri_con_lai_thuoc_hanh_chinh(self):
+        for vi_tri, bo_phan in self.theo_vi_tri.items():
+            if vi_tri not in self.GIAO_VIEN:
+                self.assertEqual(bo_phan, "Hành chính", vi_tri)
+
+    def test_moi_vi_tri_deu_khai_bo_phan(self):
+        self.assertEqual(len(self.theo_vi_tri), 11)
+        self.assertTrue(all(self.theo_vi_tri.values()))
+
+
+class TestHieuTruong(unittest.TestCase):
+    """Người điều hành trực tiếp lấy từ Sheet, không chép vào cấu hình."""
+
+    def test_chua_noi_sheet_thi_tra_rong_chu_khong_loi(self):
+        from app.services import sheets
+
+        with mock.patch.object(
+            sheets, "danh_sach_nhan_vien",
+            side_effect=sheets.ChuaCauHinh("chưa khai")
+        ):
+            r = client.get("/api/principals")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["principals"], {})
+
+    def test_sheet_loi_cung_khong_lam_hong_bieu_mau(self):
+        from app.services import sheets
+
+        with mock.patch.object(
+            sheets, "danh_sach_nhan_vien", side_effect=ZeroDivisionError("lạ")
+        ):
+            r = client.get("/api/principals")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["principals"], {})
+
+    def _voi(self, nhan_vien):
+        from app.services import sheets
+
+        gia = {"employees": nhan_vien, "columns": {}, "headers": [],
+               "tab": "NHAN_SU", "cached": False}
+        with mock.patch.object(sheets, "danh_sach_nhan_vien", return_value=gia):
+            return client.get("/api/principals").json()["principals"]
+
+    def test_tim_dung_hieu_truong_tung_co_so(self):
+        ds = [
+            {"full_name": "Châu Mỹ Thu", "unit_id": "victoria",
+             "position_id": "principal"},
+            {"full_name": "Trần Thị Mỹ Lan", "unit_id": "gau_panda",
+             "position_id": "principal"},
+            {"full_name": "Người khác", "unit_id": "gau_panda",
+             "position_id": "nanny"},
+        ]
+        self.assertEqual(self._voi(ds), {"victoria": "Châu Mỹ Thu",
+                                         "gau_panda": "Trần Thị Mỹ Lan"})
+
+    def test_hai_hieu_truong_cung_co_so_thi_bo_qua(self):
+        """Không tự chọn hộ ai khi Sheet ghi hai người cùng chức."""
+        ds = [
+            {"full_name": "Người A", "unit_id": "gau_panda",
+             "position_id": "principal"},
+            {"full_name": "Người B", "unit_id": "gau_panda",
+             "position_id": "principal"},
+        ]
+        self.assertEqual(self._voi(ds), {})
+
+    def test_bo_qua_dong_thieu_ten_hoac_thieu_co_so(self):
+        ds = [
+            {"full_name": "", "unit_id": "victoria", "position_id": "principal"},
+            {"full_name": "Không rõ cơ sở", "unit_id": None,
+             "position_id": "principal"},
+        ]
+        self.assertEqual(self._voi(ds), {})
 
 
 if __name__ == "__main__":

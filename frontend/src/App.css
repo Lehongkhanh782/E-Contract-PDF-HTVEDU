@@ -511,3 +511,21 @@ table.calc tr.phu td {
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--line, #ddd);
 }
+
+/* Ô bắt buộc còn trống: viền đỏ cho nổi lên giữa biểu mẫu dài. */
+.field.thieu > input,
+.field.thieu > select {
+  border-color: var(--brand);
+  border-width: 2px;
+  background: #fff6f6;
+}
+.field.thieu > .label {
+  color: var(--brand-dark);
+  font-weight: 700;
+}
+@media (prefers-color-scheme: dark) {
+  .field.thieu > input,
+  .field.thieu > select {
+    background: #2a1416;
+  }
+}

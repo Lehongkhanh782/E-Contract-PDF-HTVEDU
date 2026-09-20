@@ -1,5 +1,10 @@
-import { useMemo, useState } from 'react'
-import { ApiError, UnauthorizedError, downloadProbationPdf } from './api'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  ApiError,
+  UnauthorizedError,
+  downloadProbationPdf,
+  fetchPrincipals,
+} from './api'
 import { Field, Section, Select } from './components'
 import EmployeePicker from './EmployeePicker'
 import IdCardReader from './IdCardReader'
@@ -54,11 +59,48 @@ export default function ProbationForm({
 }) {
   const [form, setForm] = useState<Form>(bieuMauTrong)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  // Hiệu trưởng từng cơ sở, đọc từ Google Sheet. Chưa nối Sheet thì rỗng
+  // và ô người điều hành hiện ra cho gõ tay.
+  const [hieuTruong, setHieuTruong] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    fetchPrincipals()
+      .then((r) => setHieuTruong(r.principals))
+      .catch(() => setHieuTruong({}))
+  }, [])
 
   type NhomLong = 'employee' | 'job' | 'probation' | 'payment'
 
   function patch<K extends NhomLong>(khoa: K, gia_tri: Partial<Form[K]>) {
     setForm((cu) => ({ ...cu, [khoa]: { ...cu[khoa], ...gia_tri } }))
+  }
+
+  /** Chọn cơ sở thì điền luôn hiệu trưởng của cơ sở đó. */
+  function chonCoSo(unit_id: string) {
+    setForm((cu) => ({
+      ...cu,
+      unit_id,
+      job: {
+        ...cu.job,
+        // Không biết hiệu trưởng cơ sở mới thì xóa trống cho ô đỏ lên.
+        // Giữ lại tên của cơ sở cũ là in ra một cái tên sai mà không ai
+        // để ý, nguy hơn hẳn một ô còn trống.
+        supervisor_name: hieuTruong[unit_id] ?? '',
+      },
+    }))
+  }
+
+  /** Chọn chức danh thì điền luôn bộ phận công tác theo cấu hình. */
+  function chonChucDanh(position_id: string) {
+    const vi_tri = positions.find((p) => p.position_id === position_id)
+    setForm((cu) => ({
+      ...cu,
+      job: {
+        ...cu.job,
+        position_id,
+        department: vi_tri?.department ?? cu.job.department,
+      },
+    }))
   }
 
   // Ngày ký chính là ngày bắt đầu thử việc, như hợp đồng chính thức.
@@ -136,7 +178,7 @@ export default function ProbationForm({
           label="Cơ sở"
           required
           value={form.unit_id}
-          onChange={(value) => setForm((cu) => ({ ...cu, unit_id: value }))}
+          onChange={chonCoSo}
           options={units.map((u) => ({
             value: u.unit_id,
             label: u.display_name,
@@ -156,9 +198,9 @@ export default function ProbationForm({
           disabled={dangBan}
           onPick={(fields, positionId, unitId) => {
             patch('employee', fields as Partial<Form['employee']>)
-            if (positionId) patch('job', { position_id: positionId })
+            if (positionId) chonChucDanh(positionId)
             if (unitId && units.some((u) => u.unit_id === unitId)) {
-              setForm((cu) => ({ ...cu, unit_id: unitId }))
+              chonCoSo(unitId)
             }
           }}
         />
@@ -236,7 +278,7 @@ export default function ProbationForm({
           label="Chức danh chuyên môn"
           required
           value={form.job.position_id}
-          onChange={(v) => patch('job', { position_id: v })}
+          onChange={chonChucDanh}
           options={positions.map((p) => ({
             value: p.position_id,
             label: p.title,
@@ -245,7 +287,7 @@ export default function ProbationForm({
         <Field
           label="Bộ phận công tác"
           required
-          hint="Ví dụ: Bảo mẫu, Giáo viên, Bếp."
+          hint="Tự điền theo chức danh; sửa được nếu trường hợp riêng."
           value={form.job.department}
           onChange={(v) => patch('job', { department: v })}
         />
@@ -253,7 +295,11 @@ export default function ProbationForm({
           label="Người điều hành trực tiếp"
           required
           wide
-          hint="Họ tên người quản lý trực tiếp, ví dụ Hiệu trưởng."
+          hint={
+            hieuTruong[form.unit_id]
+              ? 'Tự điền là hiệu trưởng của cơ sở, lấy từ Google Sheet; sửa được.'
+              : 'Họ tên người quản lý trực tiếp, thường là hiệu trưởng.'
+          }
           value={form.job.supervisor_name}
           onChange={(v) => patch('job', { supervisor_name: v })}
         />

@@ -30,6 +30,11 @@ function vietnameseDate(value: string): string | undefined {
   return `Ngày ${day}/${month}/${year}`
 }
 
+/** Ô bắt buộc mà đang trống thì tô viền đỏ, để nhìn là thấy còn thiếu gì. */
+function lopThieu(required: boolean | undefined, value: string): string {
+  return required && !value.trim() ? ' thieu' : ''
+}
+
 export function Field({
   label,
   value,
@@ -50,7 +55,11 @@ export function Field({
   inputMode?: 'numeric' | 'text'
 }) {
   return (
-    <label className={wide ? 'field field-wide' : 'field'}>
+    <label
+      className={
+        (wide ? 'field field-wide' : 'field') + lopThieu(required, value)
+      }
+    >
       <span className="label">
         {label}
         {required && <b className="req"> *</b>}
@@ -108,7 +117,7 @@ export function Select({
   hint?: string
 }) {
   return (
-    <label className="field">
+    <label className={'field' + lopThieu(required, value)}>
       <span className="label">
         {label}
         {required && <b className="req"> *</b>}

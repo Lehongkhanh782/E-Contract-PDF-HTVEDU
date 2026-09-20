@@ -204,6 +204,27 @@ def sheets_status(_: User = Depends(current_user)) -> dict:
     return ket_qua
 
 
+@router.get("/principals")
+def principals(user: User = Depends(current_user)) -> dict:
+    """Hiệu trưởng từng cơ sở, để điền sẵn ô người điều hành trực tiếp.
+
+    Chưa nối Sheet hay Sheet lỗi thì trả về rỗng chứ không báo lỗi: đây
+    chỉ là tiện ích điền nhanh, người dùng vẫn gõ tay được.
+    """
+    try:
+        tat_ca = sheets.hieu_truong_tung_co_so()
+    except (sheets.ChuaCauHinh, sheets.LoiSheet):
+        return {"principals": {}}
+    except Exception:
+        logger.exception("Lỗi ngoài dự tính khi tìm hiệu trưởng")
+        return {"principals": {}}
+    return {
+        "principals": {
+            ma: ten for ma, ten in tat_ca.items() if user.may_use(ma)
+        }
+    }
+
+
 @router.get("/employees")
 def employees(refresh: bool = False,
               _: User = Depends(current_user)) -> dict:

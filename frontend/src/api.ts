@@ -7,6 +7,7 @@ import type {
   OcrStatus,
   Position,
   PreviewResponse,
+  PrincipalList,
   SalaryResponse,
   Unit,
 } from './types'
@@ -57,6 +58,11 @@ export function fetchMe() {
 /** Danh sách nhân viên từ Google Sheet dùng chung, nếu đã nối. */
 export function fetchEmployees() {
   return getJson<EmployeeList>('/api/employees')
+}
+
+/** Hiệu trưởng từng cơ sở; trả về rỗng nếu chưa nối Sheet. */
+export function fetchPrincipals() {
+  return getJson<PrincipalList>('/api/principals')
 }
 
 export function fetchOcrStatus() {

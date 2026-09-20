@@ -84,7 +84,12 @@ export type Position = {
   title: string
   role_label: string
   base_wage: string
+  /** Bộ phận công tác suy ra từ chức danh, do cấu hình quyết định. */
+  department: string
 }
+
+/** Tên hiệu trưởng từng cơ sở, đọc từ Google Sheet nhân sự. */
+export type PrincipalList = { principals: Record<string, string> }
 
 export type SalaryMode = 'gross' | 'net'
 

@@ -44,7 +44,8 @@
       "requires_responsibility_agreement": false,
       "hr_sheet_titles": [
         "Hiệu Trưởng"
-      ]
+      ],
+      "department": "Hành chính"
     },
     {
       "position_id": "preschool_teacher",
@@ -54,7 +55,8 @@
       "requires_responsibility_agreement": true,
       "hr_sheet_titles": [
         "Giáo viên Mầm non"
-      ]
+      ],
+      "department": "Giáo viên"
     },
     {
       "position_id": "english_teacher",
@@ -64,7 +66,8 @@
       "requires_responsibility_agreement": true,
       "hr_sheet_titles": [
         "Giáo viên Tiếng Anh"
-      ]
+      ],
+      "department": "Giáo viên"
     },
     {
       "position_id": "nanny",
@@ -74,7 +77,8 @@
       "requires_responsibility_agreement": true,
       "hr_sheet_titles": [
         "Bảo mẫu"
-      ]
+      ],
+      "department": "Giáo viên"
     },
     {
       "position_id": "admissions_marketing",
@@ -82,7 +86,8 @@
       "role_label": "Nhân viên tuyển sinh Marketing",
       "base_wage": "5310000",
       "requires_responsibility_agreement": false,
-      "hr_sheet_titles": []
+      "hr_sheet_titles": [],
+      "department": "Hành chính"
     },
     {
       "position_id": "department_head",
@@ -93,7 +98,8 @@
       "hr_sheet_titles": [
         "Trưởng Phòng"
       ],
-      "source": "ke_toan_xac_nhan_2026-09-20"
+      "source": "ke_toan_xac_nhan_2026-09-20",
+      "department": "Hành chính"
     },
     {
       "position_id": "admin_staff",
@@ -104,7 +110,8 @@
       "hr_sheet_titles": [
         "Hành chính"
       ],
-      "source": "ke_toan_xac_nhan_2026-09-20"
+      "source": "ke_toan_xac_nhan_2026-09-20",
+      "department": "Hành chính"
     },
     {
       "position_id": "boarding_admin",
@@ -115,7 +122,8 @@
       "hr_sheet_titles": [
         "Hành chính bán trú"
       ],
-      "source": "ke_toan_xac_nhan_2026-09-20"
+      "source": "ke_toan_xac_nhan_2026-09-20",
+      "department": "Hành chính"
     },
     {
       "position_id": "cook",
@@ -126,7 +134,8 @@
       "hr_sheet_titles": [
         "Cấp Dưỡng"
       ],
-      "source": "ke_toan_xac_nhan_2026-09-20"
+      "source": "ke_toan_xac_nhan_2026-09-20",
+      "department": "Hành chính"
     },
     {
       "position_id": "kitchen_assistant",
@@ -137,7 +146,8 @@
       "hr_sheet_titles": [
         "Phụ bếp - Tạp vụ"
       ],
-      "source": "ke_toan_xac_nhan_2026-09-20"
+      "source": "ke_toan_xac_nhan_2026-09-20",
+      "department": "Hành chính"
     },
     {
       "position_id": "security_guard",
@@ -148,7 +158,8 @@
       "hr_sheet_titles": [
         "Bảo vệ"
       ],
-      "source": "ke_toan_xac_nhan_2026-09-20"
+      "source": "ke_toan_xac_nhan_2026-09-20",
+      "department": "Hành chính"
     }
   ],
   "positions_status": "base_wages_confirmed_by_accountant_2026-09-20",
@@ -176,5 +187,9 @@
     "rule": "<mã cơ sở>/<loại>/<mã nhân viên>",
     "source": "ke_toan_xac_nhan_2026-09-20: số hợp đồng đánh theo mã nhân viên"
   },
-  "base_wage_policy_effective_from_note": "Kế toán xác nhận 2026-09-20: ngày hiệu lực của mức lương là ngày ký hợp đồng"
+  "base_wage_policy_effective_from_note": "Kế toán xác nhận 2026-09-20: ngày hiệu lực của mức lương là ngày ký hợp đồng",
+  "department_rule": {
+    "rule": "Giáo viên mầm non, Giáo viên Tiếng Anh và Bảo mẫu thuộc bộ phận Giáo viên; các vị trí còn lại thuộc bộ phận Hành chính.",
+    "source": "nha_truong_xac_nhan_2026-09-20"
+  }
 }

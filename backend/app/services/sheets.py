@@ -437,6 +437,25 @@ def doi_chuc_vu(gia_tri: str | None) -> str | None:
     return None
 
 
+def hieu_truong_tung_co_so() -> dict[str, str]:
+    """Tên hiệu trưởng của từng cơ sở, đọc từ chính Sheet nhân sự.
+
+    Lấy từ Sheet chứ không chép vào cấu hình, để đổi hiệu trưởng thì chỉ
+    sửa một nơi. Cơ sở có nhiều người ghi chức vụ hiệu trưởng thì bỏ qua,
+    không tự chọn hộ ai.
+    """
+    nhan_vien = danh_sach_nhan_vien()["employees"]
+    theo_co_so: dict[str, list[str]] = {}
+    for nv in nhan_vien:
+        if nv.get("position_id") != "principal":
+            continue
+        ma = nv.get("unit_id")
+        ten = (nv.get("full_name") or "").strip()
+        if ma and ten:
+            theo_co_so.setdefault(ma, []).append(ten)
+    return {ma: ds[0] for ma, ds in theo_co_so.items() if len(ds) == 1}
+
+
 def gia_tri_khac_nhau(nhan_vien: list[dict], truong: str,
                       toi_da: int = 40) -> list[str] | None:
     """Liệt kê các giá trị khác nhau của một cột, để đối chiếu với cấu hình.
