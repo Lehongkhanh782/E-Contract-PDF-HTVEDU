@@ -18,6 +18,7 @@ from app.config import KIT_DIR, TEMPLATE_DIR, salary_policy
 from generate_demo import (  # noqa: E402  (phụ thuộc thứ tự sys.path)
     ban_thu_nghiem,
     build_context,
+    build_probation_context,
     can_thoa_thuan,
     convert_to_pdf,
     merge_demo_pdf,
@@ -122,6 +123,43 @@ def build_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
         return _build_pdf(unit_id, payload, destination)
     finally:
         _cong_pdf.release()
+
+
+def build_probation_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
+    """Tạo PDF hợp đồng thử việc: một tờ, không phụ lục, không thỏa thuận."""
+    if not _cong_pdf.acquire(timeout=THOI_GIAN_CHO_LUOT):
+        raise RuntimeError(
+            "Máy chủ đang bận dựng hồ sơ khác. Chờ một lát rồi bấm lại."
+        )
+    try:
+        return _build_probation_pdf(unit_id, payload, destination)
+    finally:
+        _cong_pdf.release()
+
+
+def _build_probation_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
+    soffice = _soffice()
+    font = _font()
+    context, result = build_probation_context(unit_id, payload)
+    template = TEMPLATE_DIR / "Hop_dong_thu_viec_template.docx"
+
+    with tempfile.TemporaryDirectory(prefix="econtract_") as folder:
+        work = Path(folder)
+        docx = work / "Hop_dong_thu_viec.docx"
+        render_docx(template, docx, context)
+        pdf = convert_to_pdf(docx, work / "pdf", soffice)
+        # Vẫn đi qua merge để bản thử nghiệm được đóng dấu như mọi bản khác.
+        merge_demo_pdf([pdf], destination, font, mot_tap=True)
+
+    return {
+        "demo_only": ban_thu_nghiem(),
+        "unit_id": unit_id,
+        "contract_type": "probation",
+        "contract_number": context["contract"]["number"],
+        "calculation": result,
+        "position_id": payload["job"]["position_id"],
+        "signing_and_effective_date": payload["signing_date"],
+    }
 
 
 def _build_pdf(unit_id: str, payload: dict, destination: Path) -> dict:

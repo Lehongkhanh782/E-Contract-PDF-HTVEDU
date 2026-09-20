@@ -19,6 +19,7 @@ import {
 } from './defaults'
 import Brand, { MO_TA_PHIEN_BAN, PHIEN_BAN } from './Brand'
 import EmployeePicker from './EmployeePicker'
+import ProbationForm from './ProbationForm'
 import IdCardReader from './IdCardReader'
 import SalaryTable from './SalaryTable'
 import LoginScreen from './LoginScreen'
@@ -69,6 +70,11 @@ function ContractWorkspace({
   // Câu nhắc phát hành do máy chủ quyết định, không viết cứng ở đây, để
   // giao diện không bao giờ nói sai về việc bản in có ký được hay không.
   const [notice, setNotice] = useState('')
+  // Hai loại hợp đồng dùng hai biểu mẫu khác hẳn nhau nên tách hẳn ra,
+  // thay vì nhét thêm nhánh if vào biểu mẫu chính thức.
+  const [loaiHopDong, setLoaiHopDong] = useState<'chinh_thuc' | 'thu_viec'>(
+    'chinh_thuc',
+  )
   const [positions, setPositions] = useState<Position[]>([])
   const [form, setForm] = useState<ContractForm>(emptyForm)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
@@ -257,6 +263,33 @@ function ContractWorkspace({
 
       {loadError && <p className="alert error">{loadError}</p>}
 
+      <div className="toolbar loai-hop-dong">
+        <button
+          type="button"
+          className={loaiHopDong === 'chinh_thuc' ? 'primary' : 'ghost'}
+          onClick={() => setLoaiHopDong('chinh_thuc')}
+          disabled={busy}
+        >
+          Hợp đồng chính thức
+        </button>
+        <button
+          type="button"
+          className={loaiHopDong === 'thu_viec' ? 'primary' : 'ghost'}
+          onClick={() => setLoaiHopDong('thu_viec')}
+          disabled={busy}
+        >
+          Hợp đồng thử việc
+        </button>
+      </div>
+
+      {loaiHopDong === 'thu_viec' ? (
+        <ProbationForm
+          units={units}
+          positions={positions}
+          onSignedOut={onSignedOut}
+        />
+      ) : (
+        <>
       <div className="toolbar">
         <button
           type="button"
@@ -633,12 +666,13 @@ function ContractWorkspace({
           </p>
         )}
       </section>
+        </>
+      )}
 
       <footer className="foot">
-        Bản thử nghiệm. Chưa có lưu trữ hồ sơ nhân viên và chưa có luồng phát
-        hành chính thức, nên mỗi lần tạo hợp đồng đều phải nhập lại từ đầu và
-        PDF chưa dùng để ký. Công thức bảo hiểm, công đoàn và thuế vẫn là
-        chính sách minh họa, chưa được kế toán xác nhận.
+        Mức lương từng vị trí, tỷ lệ bảo hiểm, công đoàn và cách tính thuế đã
+        được kế toán xác nhận ngày 20/09/2026. Hệ thống chưa lưu lịch sử hợp
+        đồng đã tạo, nên hãy tự kiểm tra tránh tạo trùng cho cùng một người.
         <br />
         <span className="version">
           Phiên bản {PHIEN_BAN} — {MO_TA_PHIEN_BAN}

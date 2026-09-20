@@ -80,12 +80,17 @@ class CoreTests(unittest.TestCase):
                          "A Tên & ký hiệu Z")
         etree.fromstring(etree.tostring(p))
 
+    # Mẫu thử việc dùng bộ dữ liệu riêng nên không đi chung vòng lặp này.
+    MAU_THU_VIEC = "Hop_dong_thu_viec_template.docx"
+
     def test_each_unit_populates_both_templates_without_other_tax_codes(self):
         units = g.load_json(g.ROOT / "config/units.json")["units"]
         with tempfile.TemporaryDirectory() as folder:
             for unit in units:
                 context, _ = g.build_context(unit["unit_id"], self.data, self.policy)
                 for template in (g.ROOT / "templates").glob("*.docx"):
+                    if template.name == self.MAU_THU_VIEC:
+                        continue
                     output = Path(folder) / template.name
                     g.render_docx(template, output, context)
                     with ZipFile(output) as z:
@@ -98,6 +103,26 @@ class CoreTests(unittest.TestCase):
                     for other in units:
                         if other["unit_id"] != unit["unit_id"]:
                             self.assertNotIn(other["tax_code"], text)
+
+    def test_mau_thu_viec_dien_duoc_cho_moi_don_vi(self):
+        """Mẫu thử việc cũng phải điền đủ cho cả bốn cơ sở, không lẫn sang nhau."""
+        units = g.load_json(g.ROOT / "config/units.json")["units"]
+        du_lieu = g.load_json(g.ROOT / "examples/probation_demo.json")
+        with tempfile.TemporaryDirectory() as folder:
+            for unit in units:
+                context, _ = g.build_probation_context(unit["unit_id"], du_lieu)
+                output = Path(folder) / self.MAU_THU_VIEC
+                g.render_docx(g.ROOT / "templates" / self.MAU_THU_VIEC,
+                              output, context)
+                with ZipFile(output) as z:
+                    root = etree.fromstring(z.read("word/document.xml"))
+                    text = "".join(root.xpath("//w:t/text()", namespaces=g.NS))
+                self.assertIn(unit["tax_code"], text)
+                self.assertIn(unit["signatory_name"], text)
+                self.assertNotIn("{{", text)
+                for other in units:
+                    if other["unit_id"] != unit["unit_id"]:
+                        self.assertNotIn(other["tax_code"], text)
 
     def test_user_confirmed_position_base_wages(self):
         expected = {'principal':'7000000', 'preschool_teacher':'5310000',

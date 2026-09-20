@@ -15,7 +15,7 @@ from starlette.background import BackgroundTask
 from app import config
 from app.auth import User
 from app.deps import current_user, require_unit
-from app.schemas import ContractRequest, SalaryRequest
+from app.schemas import ContractRequest, ProbationRequest, SalaryRequest
 from app.services import documents, ocr, sheets
 
 logger = logging.getLogger("econtract.ocr")
@@ -298,6 +298,47 @@ def generate(request: ContractRequest,
         headers={
             "X-Demo-Only": "true",
             "X-Calculation-Sha256": meta["sha256"],
+        },
+        background=BackgroundTask(cleanup),
+    )
+
+
+@router.post("/generate/probation")
+def generate_probation(request: ProbationRequest,
+                       user: User = Depends(current_user)) -> FileResponse:
+    """Tạo PDF hợp đồng thử việc: một tờ, không phụ lục, không thỏa thuận."""
+    require_unit(user, request.unit_id)
+    folder = Path(tempfile.mkdtemp(prefix="econtract_out_"))
+    target = folder / "Hop_dong_thu_viec.pdf"
+
+    def cleanup() -> None:
+        shutil.rmtree(folder, ignore_errors=True)
+
+    try:
+        meta = documents.build_probation_pdf(
+            request.unit_id, request.to_kit_payload(), target
+        )
+    except ValueError as error:
+        cleanup()
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        cleanup()
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception:
+        cleanup()
+        raise
+
+    dau = "DEMO_" if meta["demo_only"] else ""
+    name = _ascii_filename(
+        f"{dau}Thu_viec_{request.employee.code}_{request.unit_id}"
+    ) + ".pdf"
+    return FileResponse(
+        target,
+        media_type="application/pdf",
+        filename=name,
+        headers={
+            "X-Demo-Only": "true" if meta["demo_only"] else "false",
+            "X-Contract-Number": _ascii_filename(meta["contract_number"]),
         },
         background=BackgroundTask(cleanup),
     )

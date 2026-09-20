@@ -23,7 +23,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from zipfile import ZipFile
@@ -306,6 +306,99 @@ def so_van_ban(ma_co_so: str, loai: str, ma_nhan_vien: str) -> str:
     return f"DEMO/{so}" if ban_thu_nghiem() else so
 
 
+def _don_vi(unit_id: str) -> dict:
+    units = load_json(ROOT / "config/units.json")["units"]
+    chon = [unit for unit in units if unit["unit_id"] == unit_id]
+    if len(chon) != 1:
+        raise ValueError("Đơn vị không có trong cấu hình")
+    return copy.deepcopy(chon[0])
+
+
+def so_thang(bat_dau: date, ket_thuc: date) -> int:
+    """Số tháng giữa hai mốc, tính cả ngày kết thúc.
+
+    Cộng một ngày vào mốc cuối trước khi đếm, để mốc rơi đúng ngày cuối
+    tháng ra số tháng tròn thay vì thiếu một ngày.
+    """
+    sau = ket_thuc + timedelta(days=1)
+    thang = (sau.year - bat_dau.year) * 12 + sau.month - bat_dau.month
+    if sau.day < bat_dau.day:
+        thang -= 1
+    return thang
+
+
+def build_probation_context(unit_id: str, data: dict) -> tuple[dict, dict]:
+    """Dựng dữ liệu cho hợp đồng thử việc.
+
+    Thử việc chỉ có một tờ hợp đồng: không phụ lục lương, không thỏa thuận
+    trách nhiệm, và không khấu trừ bảo hiểm hay công đoàn — nhà trường xác
+    nhận trong thời gian thử việc chưa hưởng các chế độ đó. Vì vậy hàm này
+    không đi qua bộ tính lương của hợp đồng chính thức.
+    """
+    unit = _don_vi(unit_id)
+    thu_viec = data["probation"]
+    bat_dau = date.fromisoformat(thu_viec["start_date"])
+    ket_thuc = date.fromisoformat(thu_viec["end_date"])
+    if ket_thuc < bat_dau:
+        raise ValueError("Ngày kết thúc thử việc trước ngày bắt đầu")
+
+    luong_chinh_thuc = whole_vnd(thu_viec.get("full_gross"), "probation.full_gross")
+    if luong_chinh_thuc <= 0:
+        raise ValueError("Lương chính thức phải lớn hơn 0")
+    ty_le = decimal_input(thu_viec.get("rate_percent"), "probation.rate_percent")
+    if not 0 < ty_le <= 100:
+        raise ValueError("Tỷ lệ lương thử việc phải trong khoảng 0 đến 100")
+    luong_thu_viec = round_vnd(luong_chinh_thuc * ty_le / 100)
+
+    thang = so_thang(bat_dau, ket_thuc)
+    ket_qua = {
+        "full_gross": str(luong_chinh_thuc),
+        "rate_percent": str(ty_le.normalize()),
+        "probation_salary": str(luong_thu_viec),
+        "months": str(thang),
+    }
+    position = selected_position(data)
+    context = {
+        "employer": {
+            **unit,
+            "workplace_institution_upper":
+                unit["workplace_institution_name"].upper(),
+        },
+        "employee": {
+            **copy.deepcopy(data["employee"]),
+            # Ngày trong hợp đồng viết dd/mm/yyyy, không phải dạng máy.
+            "birth_date": date_short(data["employee"]["birth_date"]),
+            "identity_issue_date":
+                date_short(data["employee"]["identity_issue_date"]),
+        },
+        "job": {
+            "title": position["title"],
+            "role_label": position["role_label"],
+            "department": data["job"].get("department") or position["title"],
+            "supervisor_name": data["job"].get("supervisor_name") or "",
+        },
+        "payment": copy.deepcopy(data["payment"]),
+        "signing": {"date_long": date_long(data["signing_date"])},
+        "contract": {
+            "number": so_van_ban(unit["code"], "HDTV",
+                                 data["employee"].get("code")),
+        },
+        "probation": {
+            "start_date": date_short(thu_viec["start_date"]),
+            "end_date": date_short(thu_viec["end_date"]),
+            "term_text": f"{thang} tháng",
+            "rate_percent": ket_qua["rate_percent"],
+            "work_hours": thu_viec["work_hours"],
+            "rest_hours": thu_viec["rest_hours"],
+        },
+        "display": {
+            "full_gross": money(luong_chinh_thuc),
+            "probation_salary": money(luong_thu_viec),
+        },
+    }
+    return context, ket_qua
+
+
 def build_context(unit_id: str, data: dict, policy: dict, agreement_pages=3):
     if data.get("demo_only") is not True:
         raise ValueError("Chỉ hỗ trợ dữ liệu minh họa demo_only=true")
@@ -438,13 +531,17 @@ def _trang_de_trong(width: float, height: float):
     return PdfReader(io.BytesIO(stream.getvalue())).pages[0]
 
 
-def merge_demo_pdf(paths: list[Path], output: Path, font_path: Path):
+def merge_demo_pdf(paths: list[Path], output: Path, font_path: Path,
+                   mot_tap: bool = False):
     """Ghép thành một PDF, chèn trang trắng để in hai mặt tách tờ được.
 
     Hợp đồng, phụ lục lương và thỏa thuận được bấm thành ba tập riêng, nên
     mỗi phần phải bắt đầu ở mặt trước của một tờ mới. Khi in hai mặt, mặt
     trước luôn là trang lẻ, vì vậy phần nào kết thúc ở trang lẻ sẽ được
     chèn thêm một trang trắng.
+
+    mot_tap=True dành cho hợp đồng thử việc: chỉ một tập, không phụ lục,
+    nên không tách và không chèn trang trắng nào.
     """
     from pypdf import PdfReader, PdfWriter
     from reportlab.pdfgen import canvas
@@ -455,13 +552,20 @@ def merge_demo_pdf(paths: list[Path], output: Path, font_path: Path):
     if not 1 <= len(paths) <= 2:
         raise ValueError("Cần một file hợp đồng, kèm hoặc không kèm thỏa thuận")
     contract_pdf = paths[0]
-    trang_hop_dong, trang_phu_luc = tach_hop_dong_va_phu_luc(contract_pdf)
 
-    phan = [
-        ("Hợp đồng lao động", contract_pdf, trang_hop_dong),
-        ("Phụ lục lương", contract_pdf, trang_phu_luc),
-    ]
+    if mot_tap:
+        if len(paths) != 1:
+            raise ValueError("Bộ một tập chỉ nhận đúng một file")
+        phan = [("Hợp đồng thử việc", contract_pdf,
+                 list(range(len(PdfReader(contract_pdf).pages))))]
+    else:
+        trang_hop_dong, trang_phu_luc = tach_hop_dong_va_phu_luc(contract_pdf)
+        phan = [
+            ("Hợp đồng lao động", contract_pdf, trang_hop_dong),
+            ("Phụ lục lương", contract_pdf, trang_phu_luc),
+        ]
     # Vị trí không phải ký thỏa thuận thì bộ hồ sơ chỉ có hai phần.
+    # Bộ một tập đã chặn trường hợp hai file ở trên.
     if len(paths) == 2:
         agreement_pdf = paths[1]
         phan.append(("Thỏa thuận trách nhiệm", agreement_pdf,

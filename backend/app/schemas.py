@@ -33,6 +33,12 @@ class Employee(Strict):
     permanent_address: LongText
 
 
+class ProbationEmployee(Employee):
+    """Hợp đồng thử việc có thêm dòng Quê quán mà hợp đồng chính thức không có."""
+
+    hometown: Text
+
+
 class Job(Strict):
     position_id: Text
 
@@ -106,6 +112,49 @@ class ContractRequest(Strict):
         # Phần lõi chỉ chấp nhận dữ liệu minh họa. Khi nào có luồng phát hành
         # chính thức thì mới bỏ cờ này.
         payload["demo_only"] = True
+        return payload
+
+
+class ProbationJob(Strict):
+    position_id: Text
+    department: Text
+    supervisor_name: Text
+
+
+class Probation(Strict):
+    start_date: date
+    end_date: date
+    full_gross: Money
+    # Nhà trường đang dùng 85%; để sửa được vì có thể khác theo từng người.
+    rate_percent: Annotated[str, Field(pattern=r"^\d{1,3}(\.\d{1,2})?$")]
+    work_hours: Text
+    rest_hours: Text
+
+    @field_validator("full_gross")
+    @classmethod
+    def duong(cls, value: str) -> str:
+        if Decimal(value) <= 0:
+            raise ValueError("Lương chính thức phải lớn hơn 0")
+        return value
+
+
+class ProbationRequest(Strict):
+    """Hợp đồng thử việc: một tờ, không phụ lục, không thỏa thuận.
+
+    Thời gian thử việc chưa hưởng chế độ bảo hiểm và công đoàn nên không
+    có phần khấu trừ; vì vậy đầu vào không kèm compensation.
+    """
+
+    unit_id: Text
+    employee: ProbationEmployee
+    job: ProbationJob
+    signing_date: date
+    probation: Probation
+    payment: Payment
+
+    def to_kit_payload(self) -> dict:
+        payload = self.model_dump(mode="json")
+        payload.pop("unit_id")
         return payload
 
 

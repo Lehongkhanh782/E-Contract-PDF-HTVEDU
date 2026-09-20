@@ -1,6 +1,7 @@
 import type {
   Account,
   ContractForm,
+  ProbationForm,
   EmployeeList,
   OcrResult,
   OcrStatus,
@@ -132,8 +133,23 @@ export async function preview(form: ContractForm): Promise<PreviewResponse> {
 }
 
 /** Tải PDF về máy. Trả tên file đã lưu. */
+export async function downloadProbationPdf(
+  form: ProbationForm,
+): Promise<string> {
+  return taiPdf('/api/generate/probation', form, 'Hop_dong_thu_viec.pdf')
+}
+
 export async function downloadPdf(form: ContractForm): Promise<string> {
-  const response = await fetch('/api/generate', {
+  return taiPdf('/api/generate', form, 'Bo_hop_dong.pdf')
+}
+
+/** Gửi biểu mẫu, nhận PDF và bảo trình duyệt tải xuống. */
+async function taiPdf(
+  duong_dan: string,
+  form: unknown,
+  ten_du_phong: string,
+): Promise<string> {
+  const response = await fetch(duong_dan, {
     ...WITH_SESSION,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -143,7 +159,7 @@ export async function downloadPdf(form: ContractForm): Promise<string> {
 
   const disposition = response.headers.get('Content-Disposition') ?? ''
   const matched = /filename="?([^"]+)"?/.exec(disposition)
-  const name = matched?.[1] ?? 'Bo_hop_dong_thu_nghiem.pdf'
+  const name = matched?.[1] ?? ten_du_phong
 
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)

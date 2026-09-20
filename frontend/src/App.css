@@ -504,3 +504,10 @@ table.calc tr.phu td {
   padding-top: 0.5rem;
   border-top: 1px dashed var(--gold);
 }
+
+/* Hai nút chọn loại hợp đồng, tách khỏi thanh công cụ bên dưới. */
+.toolbar.loai-hop-dong {
+  margin-bottom: 0.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--line, #ddd);
+}

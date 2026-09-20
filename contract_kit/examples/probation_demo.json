@@ -1,0 +1,31 @@
+{
+  "employee": {
+    "full_name": "Nguyễn Thị Minh An",
+    "code": "NV-DEMO-001",
+    "birth_date": "1999-01-01",
+    "gender": "Nữ",
+    "nationality": "Việt Nam",
+    "hometown": "Bạc Liêu",
+    "identity_number": "079199000123",
+    "identity_issue_date": "2025-01-01",
+    "identity_issuer": "Cục Cảnh sát",
+    "permanent_address": "12 Lê Lợi, Quận 1, Thành phố Hồ Chí Minh"
+  },
+  "job": {
+    "position_id": "preschool_teacher",
+    "department": "Giáo viên",
+    "supervisor_name": "Trần Thị Mỹ Lan"
+  },
+  "signing_date": "2026-08-01",
+  "probation": {
+    "start_date": "2026-08-01",
+    "end_date": "2026-09-30",
+    "full_gross": "8800000",
+    "rate_percent": "85",
+    "work_hours": "07g00 – 17g00",
+    "rest_hours": "12g00 – 14g00"
+  },
+  "payment": {
+    "window_text": "Từ ngày 01 – ngày 05 hàng tháng"
+  }
+}

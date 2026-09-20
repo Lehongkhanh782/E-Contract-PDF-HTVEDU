@@ -154,3 +154,37 @@ export type PreviewResponse = {
   policy_status: string
   notice: string
 }
+
+/** Hợp đồng thử việc: một tờ, không phụ lục, không khấu trừ. */
+export type ProbationForm = {
+  unit_id: string
+  employee: {
+    full_name: string
+    code: string
+    birth_date: string
+    gender: string
+    nationality: string
+    /** Mẫu thử việc có dòng Quê quán mà hợp đồng chính thức không có. */
+    hometown: string
+    identity_number: string
+    identity_issue_date: string
+    identity_issuer: string
+    permanent_address: string
+  }
+  job: {
+    position_id: string
+    department: string
+    supervisor_name: string
+  }
+  signing_date: string
+  probation: {
+    start_date: string
+    end_date: string
+    /** Lương chính thức; lương thử việc là một tỷ lệ của số này. */
+    full_gross: string
+    rate_percent: string
+    work_hours: string
+    rest_hours: string
+  }
+  payment: { window_text: string }
+}
