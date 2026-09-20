@@ -60,9 +60,14 @@ export function fetchEmployees() {
   return getJson<EmployeeList>('/api/employees')
 }
 
-/** Viết đầy đủ địa chỉ thay vì viết tắt. Lỗi thì giữ nguyên chữ đã gõ. */
-export async function tidyAddress(address: string): Promise<string> {
-  if (!address.trim()) return address
+export type TidyAddress = { address: string; warnings: string[] }
+
+/**
+ * Viết đầy đủ địa chỉ và quy về danh mục hành chính từ 01/7/2025.
+ * Máy chủ lỗi thì giữ nguyên chữ đã gõ, không làm hỏng biểu mẫu.
+ */
+export async function tidyAddress(address: string): Promise<TidyAddress> {
+  if (!address.trim()) return { address, warnings: [] }
   try {
     const r = await fetch('/api/address', {
       ...WITH_SESSION,
@@ -70,10 +75,11 @@ export async function tidyAddress(address: string): Promise<string> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address }),
     })
-    if (!r.ok) return address
-    return ((await r.json()) as { address: string }).address || address
+    if (!r.ok) return { address, warnings: [] }
+    const body = (await r.json()) as TidyAddress
+    return { address: body.address || address, warnings: body.warnings ?? [] }
   } catch {
-    return address
+    return { address, warnings: [] }
   }
 }
 

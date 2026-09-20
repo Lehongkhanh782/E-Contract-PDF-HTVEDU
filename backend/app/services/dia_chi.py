@@ -8,8 +8,10 @@ còn tệ hơn để nguyên chữ viết tắt.
 """
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
+from functools import lru_cache
 
 # Viết tắt của cấp hành chính. Khớp cả khi có dấu chấm và khi không.
 CAP_HANH_CHINH = {
@@ -127,14 +129,105 @@ def _mo_rong_mot_doan(doan: str) -> str:
     return _hoa_dau_tu(" ".join(ra))
 
 
-def viet_day_du(dia_chi: str) -> str:
-    """Mở rộng chữ viết tắt trong địa chỉ và sửa lại cách viết hoa.
+# Cấp quận huyện đã bỏ từ 01/7/2025: địa chỉ mới chỉ còn phường xã và
+# tỉnh thành. Nhận ra các đoạn này để bỏ đi, nhưng chỉ khi đã chắc chắn
+# tìm thấy phường xã hợp lệ trong danh mục chính thức.
+CAP_DA_BO = ("Quận", "Huyện", "Thị xã")
 
-    Không thêm thông tin người dùng chưa gõ, không bỏ bớt phần nào, và
-    không đổi tên phường xã theo đợt sáp nhập.
+
+@lru_cache(maxsize=1)
+def _danh_muc() -> dict:
+    """Danh mục đơn vị hành chính chính thức, nạp một lần rồi giữ lại."""
+    from app.config import CONFIG_DIR
+
+    duong_dan = CONFIG_DIR / "don_vi_hanh_chinh.json"
+    if not duong_dan.is_file():
+        return {}
+    goc = json.loads(duong_dan.read_text(encoding="utf-8"))
+
+    theo_tinh: dict[str, dict[str, str]] = {}
+    for ma, ds in goc["don_vi"].items():
+        # Tra theo tên đã bỏ dấu và bỏ chữ Phường/Xã/Thị trấn ở đầu, để
+        # người gõ "P. Củ Chi" vẫn tìm ra "Xã Củ Chi".
+        theo_tinh[ma] = {_khong_dau(_bo_tien_to(t)): t for t in ds}
+    return {
+        "tinh": {_khong_dau(t["ten"]): t["ma"] for t in goc["tinh_thanh"]},
+        "ten_tinh": {t["ma"]: t["ten"] for t in goc["tinh_thanh"]},
+        "don_vi": theo_tinh,
+        "nguon": goc["nguon"],
+    }
+
+
+def _bo_tien_to(ten: str) -> str:
+    # Về NFC trước khi so, vì chữ lấy từ file Word hay ở dạng tổ hợp.
+    ten = unicodedata.normalize("NFC", ten)
+    for tien_to in ("Phường", "Xã", "Thị trấn", "Đặc khu"):
+        if ten.startswith(tien_to + " "):
+            return ten[len(tien_to) + 1:]
+    return ten
+
+
+def viet_day_du(dia_chi: str) -> str:
+    """Chỉ mở rộng chữ viết tắt, không đụng tới danh mục hành chính."""
+    return chuan_hoa(dia_chi)["address"]
+
+
+def chuan_hoa(dia_chi: str) -> dict:
+    """Viết đầy đủ địa chỉ và quy về danh mục hành chính từ 01/7/2025.
+
+    Trả về địa chỉ đã sửa kèm danh sách lời nhắc. Chỉ bỏ cấp quận huyện
+    khi đã tìm thấy phường xã hợp lệ trong danh mục chính thức; tìm không
+    ra thì giữ nguyên mọi thứ và nhắc người dùng kiểm tra, chứ không đoán.
     """
     if not dia_chi or not dia_chi.strip():
-        return ""
-    doan = [d for d in re.split(r"\s*,\s*", dia_chi.strip()) if d.strip()]
-    ket_qua = [_mo_rong_mot_doan(d) for d in doan]
-    return ", ".join(d for d in ket_qua if d)
+        return {"address": "", "warnings": []}
+
+    doan = [_mo_rong_mot_doan(d)
+            for d in re.split(r"\s*,\s*", dia_chi.strip()) if d.strip()]
+    doan = [d for d in doan if d]
+    danh_muc = _danh_muc()
+    if not danh_muc:
+        return {"address": ", ".join(doan), "warnings": []}
+
+    # Tỉnh thành thường ở đoạn cuối; không có thì không quy chiếu được.
+    ma_tinh = None
+    for i in range(len(doan) - 1, -1, -1):
+        ma = danh_muc["tinh"].get(_khong_dau(doan[i]))
+        if ma:
+            ma_tinh = ma
+            doan[i] = danh_muc["ten_tinh"][ma]
+            break
+    if not ma_tinh:
+        return {
+            "address": ", ".join(doan),
+            "warnings": ["Chưa nhận ra tỉnh thành nên không đối chiếu được "
+                         "với danh mục hành chính mới."],
+        }
+
+    trong_tinh = danh_muc["don_vi"][ma_tinh]
+    vi_tri_phuong = None
+    for i, d in enumerate(doan):
+        chinh_thuc = trong_tinh.get(_khong_dau(_bo_tien_to(d)))
+        if chinh_thuc:
+            doan[i] = chinh_thuc
+            vi_tri_phuong = i
+            break
+
+    nhac: list[str] = []
+    if vi_tri_phuong is None:
+        nhac.append(
+            "Không tìm thấy phường xã nào của địa chỉ này trong danh mục "
+            "hành chính từ 01/7/2025. Có thể đây là tên phường cũ đã sáp "
+            "nhập — kiểm tra lại trước khi in hợp đồng."
+        )
+        return {"address": ", ".join(doan), "warnings": nhac}
+
+    # Đã chắc chắn có phường xã hợp lệ thì mới bỏ cấp quận huyện.
+    giu = []
+    for i, d in enumerate(doan):
+        if i != vi_tri_phuong and d.startswith(CAP_DA_BO):
+            nhac.append(f"Đã bỏ \"{d}\" vì cấp quận huyện không còn từ "
+                        "01/7/2025.")
+            continue
+        giu.append(d)
+    return {"address": ", ".join(giu), "warnings": nhac}

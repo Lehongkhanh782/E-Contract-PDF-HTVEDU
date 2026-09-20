@@ -71,6 +71,8 @@ function ContractWorkspace({
   // Câu nhắc phát hành do máy chủ quyết định, không viết cứng ở đây, để
   // giao diện không bao giờ nói sai về việc bản in có ký được hay không.
   const [notice, setNotice] = useState('')
+  // Lời nhắc về địa chỉ, ví dụ tên phường không còn trong danh mục mới.
+  const [nhacDiaChi, setNhacDiaChi] = useState<string[]>([])
   // Hai loại hợp đồng dùng hai biểu mẫu khác hẳn nhau nên tách hẳn ra,
   // thay vì nhét thêm nhánh if vào biểu mẫu chính thức.
   const [loaiHopDong, setLoaiHopDong] = useState<'chinh_thuc' | 'thu_viec'>(
@@ -213,12 +215,16 @@ function ContractWorkspace({
     return required.filter(([, value]) => !value.trim()).map(([label]) => label)
   }, [form])
 
-  /** Rời khỏi ô địa chỉ thì viết lại cho đầy đủ, bỏ chữ viết tắt. */
+  /**
+   * Rời khỏi ô địa chỉ thì viết lại cho đầy đủ và quy về danh mục hành
+   * chính mới. Lời nhắc hiện ngay dưới ô để người nhập tự kiểm tra.
+   */
   async function vietDayDuDiaChi() {
-    const day_du = await tidyAddress(form.employee.permanent_address)
-    if (day_du !== form.employee.permanent_address) {
-      patch('employee', { permanent_address: day_du })
+    const ket_qua = await tidyAddress(form.employee.permanent_address)
+    if (ket_qua.address !== form.employee.permanent_address) {
+      patch('employee', { permanent_address: ket_qua.address })
     }
+    setNhacDiaChi(ket_qua.warnings)
   }
 
   async function runDownload() {
@@ -449,6 +455,13 @@ function ContractWorkspace({
           value={form.employee.permanent_address}
           onChange={(value) => patch('employee', { permanent_address: value })}
         />
+        {nhacDiaChi.length > 0 && (
+          <div className="alert warn field-wide">
+            {nhacDiaChi.map((n) => (
+              <p key={n}>{n}</p>
+            ))}
+          </div>
+        )}
       </Section>
 
       <Section

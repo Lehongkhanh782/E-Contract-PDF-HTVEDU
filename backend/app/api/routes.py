@@ -178,10 +178,11 @@ def chuan_hoa_dia_chi(request: AddressRequest,
                       _: User = Depends(current_user)) -> dict:
     """Viết đầy đủ địa chỉ thay vì viết tắt.
 
-    Chỉ mở rộng chữ viết tắt và sửa cách viết hoa; không thêm thông tin
-    người dùng chưa gõ và không đổi tên phường xã theo đợt sáp nhập.
+    Mở rộng chữ viết tắt, sửa cách viết hoa, và quy tên phường xã về đúng
+    danh mục hành chính có hiệu lực từ 01/7/2025. Kèm lời nhắc khi tên
+    phường không có trong danh mục, vì đó thường là tên cũ đã sáp nhập.
     """
-    return {"address": dia_chi.viet_day_du(request.address)}
+    return dia_chi.chuan_hoa(request.address)
 
 
 @router.get("/sheets/status")

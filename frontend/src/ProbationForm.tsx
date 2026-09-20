@@ -63,6 +63,8 @@ export default function ProbationForm({
   // Hiệu trưởng từng cơ sở, đọc từ Google Sheet. Chưa nối Sheet thì rỗng
   // và ô người điều hành hiện ra cho gõ tay.
   const [hieuTruong, setHieuTruong] = useState<Record<string, string>>({})
+  // Lời nhắc về địa chỉ, ví dụ tên phường không còn trong danh mục mới.
+  const [nhacDiaChi, setNhacDiaChi] = useState<string[]>([])
 
   useEffect(() => {
     fetchPrincipals()
@@ -149,12 +151,16 @@ export default function ProbationForm({
     return can.filter(([, v]) => !v.trim()).map(([ten]) => ten)
   }, [form])
 
-  /** Rời khỏi ô địa chỉ thì viết lại cho đầy đủ, bỏ chữ viết tắt. */
+  /**
+   * Rời khỏi ô địa chỉ thì viết lại cho đầy đủ và quy về danh mục hành
+   * chính mới. Lời nhắc hiện ngay dưới ô để người nhập tự kiểm tra.
+   */
   async function vietDayDuDiaChi() {
-    const day_du = await tidyAddress(form.employee.permanent_address)
-    if (day_du !== form.employee.permanent_address) {
-      patch('employee', { permanent_address: day_du })
+    const ket_qua = await tidyAddress(form.employee.permanent_address)
+    if (ket_qua.address !== form.employee.permanent_address) {
+      patch('employee', { permanent_address: ket_qua.address })
     }
+    setNhacDiaChi(ket_qua.warnings)
   }
 
   async function taiVe() {
@@ -285,6 +291,13 @@ export default function ProbationForm({
           onChange={(v) => patch('employee', { permanent_address: v })}
           onBlur={vietDayDuDiaChi}
         />
+        {nhacDiaChi.length > 0 && (
+          <div className="alert warn field-wide">
+            {nhacDiaChi.map((n) => (
+              <p key={n}>{n}</p>
+            ))}
+          </div>
+        )}
       </Section>
 
       <Section title="3. Công việc">
