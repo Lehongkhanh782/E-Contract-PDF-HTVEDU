@@ -464,6 +464,7 @@ class TieuDeThat(unittest.TestCase):
             "unit": "Ma_Truong",
             "permanent_address": "Dia_Chi",
             "status": "Trang_Thai",
+            "contract_status": "Trang_Thai_HD",
         }
         thuc_te = {t: TIEU_DE_THAT[i] for t, i in self.cot.items()}
         self.assertEqual(thuc_te, mong_doi)
@@ -474,6 +475,11 @@ class TieuDeThat(unittest.TestCase):
 
     def test_trang_thai_khong_bi_nham_sang_trang_thai_hd(self):
         self.assertEqual(TIEU_DE_THAT[self.cot["status"]], "Trang_Thai")
+
+    def test_ngay_thu_viec_khong_bi_nham_thanh_trang_thai_hop_dong(self):
+        """Sheet có cả Ngay_Thu_Viec; đó là ngày tháng, không phải trạng thái."""
+        self.assertEqual(TIEU_DE_THAT[self.cot["contract_status"]],
+                         "Trang_Thai_HD")
 
     def test_cot_sheet_khong_co_thi_bo_trong_chu_khong_doan_bua(self):
         """Sheet không có Nơi cấp và Quốc tịch; phải để người dùng tự nhập."""
@@ -636,13 +642,23 @@ class QuyVeCauHinh(unittest.TestCase):
 
 
 class TestDanhDauThuViec(unittest.TestCase):
-    """Cột Trang_Thai cho biết ai đang thử việc."""
+    """Cột Trang_Thai_HD cho biết ai đang thử việc."""
 
     def test_nhan_ra_cac_cach_ghi_thuong_gap(self):
         for chu in ("THU_VIEC", "Thử việc", "Đang thử việc", "thu viec",
                     "probation"):
             with self.subTest(chu=chu):
                 self.assertTrue(sheets.dang_thu_viec(chu))
+
+    def test_o_dau_trong_thi_hoi_tiep_o_sau(self):
+        """Nơi nào ghi thẳng vào Trang_Thai thì vẫn nhận ra."""
+        self.assertTrue(sheets.dang_thu_viec("", "THU_VIEC"))
+        self.assertTrue(sheets.dang_thu_viec(None, "Thử việc"))
+
+    def test_o_dau_noi_duoc_thi_khong_xet_o_sau(self):
+        """Trang_Thai_HD ghi chính thức thì Trang_Thai không lật ngược lại."""
+        self.assertFalse(sheets.dang_thu_viec("CHINH_THUC", "THU_VIEC"))
+        self.assertTrue(sheets.dang_thu_viec("THU_VIEC", "DANG_LAM"))
 
     def test_da_qua_thu_viec_thi_khong_con_la_thu_viec(self):
         """Chữ vẫn có "thử việc" nhưng nghĩa ngược lại."""
@@ -662,6 +678,25 @@ class TestDanhDauThuViec(unittest.TestCase):
         self.assertTrue(sheets.con_lam_viec("THU_VIEC"))
 
 
+class TestCotTrangThaiHopDong(unittest.TestCase):
+    """Trang_Thai_HD và Trang_Thai là hai cột khác nhau, không được lẫn."""
+
+    def test_nhan_ra_ca_hai_cot(self):
+        cot = sheets.doan_cot(["Ho_Ten", "Trang_Thai_HD", "Trang_Thai"])
+        self.assertEqual(cot["contract_status"], 1)
+        self.assertEqual(cot["status"], 2)
+
+    def test_cot_hd_dung_truoc_cung_khong_bi_gianh_mat(self):
+        """Tên ngắn "trang thai" nằm gọn trong "trang thai hd"."""
+        cot = sheets.doan_cot(["Ho_Ten", "Trang_Thai", "Trang_Thai_HD"])
+        self.assertEqual(cot["status"], 1)
+        self.assertEqual(cot["contract_status"], 2)
+
+    def test_chi_co_mot_cot_thi_van_nhan_dung(self):
+        self.assertNotIn("contract_status", sheets.doan_cot(["Trang_Thai"]))
+        self.assertNotIn("status", sheets.doan_cot(["Trang_Thai_HD"]))
+
+
 class TestLoaiHopDongTrongDanhSach(unittest.TestCase):
     def setUp(self):
         sheets.xoa_bo_nho()
@@ -672,10 +707,10 @@ class TestLoaiHopDongTrongDanhSach(unittest.TestCase):
         ):
             return sheets.danh_sach_nhan_vien(lam_moi=True)["employees"]
 
-    O = [["Ho_Ten", "Ma_Truong", "Trang_Thai"],
-         ["Người thử việc", "GP", "THU_VIEC"],
-         ["Người chính thức", "GP", "DANG_LAM"],
-         ["Người không ghi gì", "GP", ""]]
+    O = [["Ho_Ten", "Ma_Truong", "Trang_Thai_HD", "Trang_Thai"],
+         ["Người thử việc", "GP", "THU_VIEC", "DANG_LAM"],
+         ["Người chính thức", "GP", "CHINH_THUC", "DANG_LAM"],
+         ["Người không ghi gì", "GP", "", "DANG_LAM"]]
 
     def test_kem_employment_type(self):
         loai = {nv["full_name"]: nv["employment_type"] for nv in self._chay(self.O)}
@@ -683,9 +718,23 @@ class TestLoaiHopDongTrongDanhSach(unittest.TestCase):
         self.assertEqual(loai["Người chính thức"], "official")
         self.assertEqual(loai["Người không ghi gì"], "official")
 
-    def test_sheet_khong_co_cot_trang_thai_thi_ai_cung_chinh_thuc(self):
-        o = [["Ho_Ten", "Ma_Truong"], ["Ai đó", "GP"]]
+    def test_giu_nguyen_chu_goc_de_doi_chieu(self):
+        nv = self._chay(self.O)[0]
+        self.assertEqual(nv["contract_status"], "THU_VIEC")
+        self.assertEqual(nv["status"], "DANG_LAM")
+
+    def test_nguoi_thu_viec_khong_bi_loc_nham_thanh_da_nghi(self):
+        ten = [nv["full_name"] for nv in self._chay(self.O)]
+        self.assertIn("Người thử việc", ten)
+
+    def test_sheet_khong_co_cot_trang_thai_hd_thi_ai_cung_chinh_thuc(self):
+        o = [["Ho_Ten", "Ma_Truong", "Trang_Thai"], ["Ai đó", "GP", "DANG_LAM"]]
         self.assertEqual(self._chay(o)[0]["employment_type"], "official")
+
+    def test_ghi_thang_vao_trang_thai_thi_van_nhan_ra(self):
+        """Không có cột Trang_Thai_HD thì đọc tiếp cột Trang_Thai."""
+        o = [["Ho_Ten", "Ma_Truong", "Trang_Thai"], ["Ai đó", "GP", "THU_VIEC"]]
+        self.assertEqual(self._chay(o)[0]["employment_type"], "probation")
 
 
 class TestGhiLichSu(unittest.TestCase):

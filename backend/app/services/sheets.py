@@ -56,10 +56,17 @@ TEN_COT = {
     "position": ("chuc vu", "vi tri", "chuc danh", "position", "job title"),
     "unit": ("co so", "don vi", "truong", "ma truong", "unit", "chi nhanh"),
     "status": ("trang thai", "tinh trang", "status"),
+    # Trạng thái hợp đồng, tách riêng khỏi trạng thái làm việc: một người
+    # đang làm bình thường vẫn có thể đang trong thời gian thử việc.
+    # Tên dài hơn nên doan_cot xét trước, "trang thai" không giành mất cột
+    # Trang_Thai_HD khi Sheet xếp cột đó đứng trước cột Trang_Thai.
+    "contract_status": ("trang thai hd", "trang thai hop dong",
+                        "tinh trang hd", "tinh trang hop dong",
+                        "loai hop dong", "dien hop dong", "contract status"),
 }
 
 # Các trường chỉ dùng để lọc/đối chiếu, không đổ thẳng vào biểu mẫu.
-TRUONG_PHU = ("status",)
+TRUONG_PHU = ("status", "contract_status")
 
 
 def _khong_dau(chuoi: str) -> str:
@@ -407,7 +414,10 @@ def danh_sach_nhan_vien(lam_moi: bool = False) -> dict[str, Any]:
         ban_ghi["position_id"] = doi_chuc_vu(ban_ghi.get("position"))
         # Để màn hình hợp đồng thử việc chỉ hiện đúng người đang thử việc.
         ban_ghi["employment_type"] = (
-            "probation" if dang_thu_viec(ban_ghi.get("status")) else "official"
+            "probation"
+            if dang_thu_viec(ban_ghi.get("contract_status"),
+                             ban_ghi.get("status"))
+            else "official"
         )
         nhan_vien.append(ban_ghi)
 
@@ -429,19 +439,29 @@ DAU_HIEU_HET_THU_VIEC = ("xong", "het", "ket thuc", "da qua", "hoan thanh",
                          "chinh thuc", "completed", "passed")
 
 
-def dang_thu_viec(trang_thai: str | None) -> bool:
-    """Cột trạng thái có đánh dấu người này đang thử việc không.
+def dang_thu_viec(*trang_thai: str | None) -> bool:
+    """Có ô nào đánh dấu người này đang thử việc không.
 
-    Bỏ trống hoặc ghi chữ không nhận ra thì coi là KHÔNG thử việc. Ngược
-    hẳn với con_lam_viec: ở đó không rõ thì giữ lại cho khỏi mất người,
-    còn ở đây không rõ mà đoán là thử việc thì sẽ in nhầm loại hợp đồng.
+    Nhận nhiều ô vì dấu hiệu nằm ở cột Trang_Thai_HD, nhưng có nơi ghi
+    thẳng vào cột Trang_Thai. Xét lần lượt, ô đầu tiên nói được điều gì
+    thì lấy điều đó; ô trống thì hỏi tiếp ô sau.
+
+    Tất cả đều trống, hoặc ghi chữ không nhận ra, thì coi là KHÔNG thử
+    việc. Ngược hẳn với con_lam_viec: ở đó không rõ thì giữ lại cho khỏi
+    mất người, còn ở đây không rõ mà đoán là thử việc thì sẽ in nhầm loại
+    hợp đồng.
     """
-    if not trang_thai:
-        return False
-    gon = _khong_dau(trang_thai)
-    if not any(dau in gon for dau in TRANG_THAI_THU_VIEC):
-        return False
-    return not any(dau in gon for dau in DAU_HIEU_HET_THU_VIEC)
+    for o in trang_thai:
+        if not o or not o.strip():
+            continue
+        # Ô đầu tiên có chữ là ô quyết định. Ghi CHINH_THUC ở cột hợp đồng
+        # thì dừng luôn tại đó, không được rơi xuống hỏi cột Trang_Thai rồi
+        # lật ngược kết luận.
+        gon = _khong_dau(o)
+        if not any(dau in gon for dau in TRANG_THAI_THU_VIEC):
+            return False
+        return not any(dau in gon for dau in DAU_HIEU_HET_THU_VIEC)
+    return False
 
 
 def con_lam_viec(trang_thai: str | None) -> bool:

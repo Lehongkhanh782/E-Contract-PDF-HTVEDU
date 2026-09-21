@@ -10,7 +10,7 @@ export const TEN_HE_THONG = 'Hệ thống hợp đồng lao động'
  * Tăng số này mỗi khi có thay đổi người dùng nhìn thấy được, để biết máy
  * chủ đã chạy bản mới hay còn bản cũ trong bộ nhớ đệm trình duyệt.
  */
-export const PHIEN_BAN = '2.5'
+export const PHIEN_BAN = '2.6'
 export const MO_TA_PHIEN_BAN = 'ghi lịch sử hợp đồng, lọc danh sách thử việc'
 
 /**
