@@ -405,6 +405,10 @@ def danh_sach_nhan_vien(lam_moi: bool = False) -> dict[str, Any]:
         # khớp thì để trống cho người dùng tự chọn.
         ban_ghi["unit_id"] = doi_ma_don_vi(ban_ghi.get("unit"))
         ban_ghi["position_id"] = doi_chuc_vu(ban_ghi.get("position"))
+        # Để màn hình hợp đồng thử việc chỉ hiện đúng người đang thử việc.
+        ban_ghi["employment_type"] = (
+            "probation" if dang_thu_viec(ban_ghi.get("status")) else "official"
+        )
         nhan_vien.append(ban_ghi)
 
     with _khoa_nho:
@@ -416,6 +420,28 @@ def danh_sach_nhan_vien(lam_moi: bool = False) -> dict[str, Any]:
 # Trạng thái cho biết người đó đã nghỉ. So khớp không dấu, viết thường.
 TRANG_THAI_DA_NGHI = ("nghi viec", "da nghi", "thoi viec", "nghi", "ngung",
                       "inactive", "resigned", "terminated")
+
+# Trạng thái cho biết người đó đang trong thời gian thử việc.
+TRANG_THAI_THU_VIEC = ("thu viec", "probation", "probationary")
+# Nhưng "đã thử việc xong" thì ngược lại: người đó đã qua thử việc rồi.
+# Không xét mấy chữ này thì danh sách thử việc sẽ lẫn cả người đã ký chính thức.
+DAU_HIEU_HET_THU_VIEC = ("xong", "het", "ket thuc", "da qua", "hoan thanh",
+                         "chinh thuc", "completed", "passed")
+
+
+def dang_thu_viec(trang_thai: str | None) -> bool:
+    """Cột trạng thái có đánh dấu người này đang thử việc không.
+
+    Bỏ trống hoặc ghi chữ không nhận ra thì coi là KHÔNG thử việc. Ngược
+    hẳn với con_lam_viec: ở đó không rõ thì giữ lại cho khỏi mất người,
+    còn ở đây không rõ mà đoán là thử việc thì sẽ in nhầm loại hợp đồng.
+    """
+    if not trang_thai:
+        return False
+    gon = _khong_dau(trang_thai)
+    if not any(dau in gon for dau in TRANG_THAI_THU_VIEC):
+        return False
+    return not any(dau in gon for dau in DAU_HIEU_HET_THU_VIEC)
 
 
 def con_lam_viec(trang_thai: str | None) -> bool:

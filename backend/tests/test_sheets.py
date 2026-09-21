@@ -635,6 +635,59 @@ class QuyVeCauHinh(unittest.TestCase):
         self.assertEqual(ten, ["Người đang làm"])
 
 
+class TestDanhDauThuViec(unittest.TestCase):
+    """Cột Trang_Thai cho biết ai đang thử việc."""
+
+    def test_nhan_ra_cac_cach_ghi_thuong_gap(self):
+        for chu in ("THU_VIEC", "Thử việc", "Đang thử việc", "thu viec",
+                    "probation"):
+            with self.subTest(chu=chu):
+                self.assertTrue(sheets.dang_thu_viec(chu))
+
+    def test_da_qua_thu_viec_thi_khong_con_la_thu_viec(self):
+        """Chữ vẫn có "thử việc" nhưng nghĩa ngược lại."""
+        for chu in ("THU_VIEC_XONG", "Đã thử việc xong", "Hết thử việc",
+                    "Thử việc hoàn thành", "Thử việc - đã ký chính thức"):
+            with self.subTest(chu=chu):
+                self.assertFalse(sheets.dang_thu_viec(chu))
+
+    def test_khong_ro_thi_coi_la_chinh_thuc(self):
+        """Đoán bừa là thử việc thì sẽ in nhầm loại hợp đồng."""
+        for chu in ("DANG_LAM", "", None, "Chính thức", "Biên chế"):
+            with self.subTest(chu=chu):
+                self.assertFalse(sheets.dang_thu_viec(chu))
+
+    def test_nguoi_thu_viec_van_nam_trong_danh_sach(self):
+        """Lọc người đã nghỉ không được vô tình loại luôn người thử việc."""
+        self.assertTrue(sheets.con_lam_viec("THU_VIEC"))
+
+
+class TestLoaiHopDongTrongDanhSach(unittest.TestCase):
+    def setUp(self):
+        sheets.xoa_bo_nho()
+
+    def _chay(self, o):
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "_doc_o", return_value=("NHAN_SU", o)
+        ):
+            return sheets.danh_sach_nhan_vien(lam_moi=True)["employees"]
+
+    O = [["Ho_Ten", "Ma_Truong", "Trang_Thai"],
+         ["Người thử việc", "GP", "THU_VIEC"],
+         ["Người chính thức", "GP", "DANG_LAM"],
+         ["Người không ghi gì", "GP", ""]]
+
+    def test_kem_employment_type(self):
+        loai = {nv["full_name"]: nv["employment_type"] for nv in self._chay(self.O)}
+        self.assertEqual(loai["Người thử việc"], "probation")
+        self.assertEqual(loai["Người chính thức"], "official")
+        self.assertEqual(loai["Người không ghi gì"], "official")
+
+    def test_sheet_khong_co_cot_trang_thai_thi_ai_cung_chinh_thuc(self):
+        o = [["Ho_Ten", "Ma_Truong"], ["Ai đó", "GP"]]
+        self.assertEqual(self._chay(o)[0]["employment_type"], "official")
+
+
 class TestGhiLichSu(unittest.TestCase):
     """Ghi lịch sử hợp đồng vào tab riêng trong cùng Sheet."""
 

@@ -224,6 +224,7 @@ export default function ProbationForm({
         <EmployeePicker
           positions={positions}
           lamMoiLichSu={lamMoiLichSu}
+          chiThuViec
           unitId={form.unit_id}
           unitName={coSo?.display_name}
           disabled={dangBan}

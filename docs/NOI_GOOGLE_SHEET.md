@@ -142,6 +142,27 @@ giờ sửa hay xóa tab nhân sự của bạn. Nó chỉ thêm dòng vào tab
 **Dữ liệu vẫn là gợi ý.** Sheet có thể cũ hoặc thiếu, nên nhân sự vẫn phải
 đọc lại từng ô trước khi tạo hợp đồng. Giao diện có ghi nhắc điều này.
 
+## Cột Trang_Thai: đánh dấu ai đang thử việc
+
+Màn hình **Hợp đồng thử việc** chỉ hiện những người mà cột `Trang_Thai`
+ghi `THU_VIEC`. Màn hình hợp đồng chính thức vẫn hiện đủ mọi người.
+
+Hệ thống nhận các cách ghi sau, không phân biệt hoa thường và có dấu hay
+không: `THU_VIEC`, `Thử việc`, `Đang thử việc`, `probation`.
+
+Ghi kèm chữ cho biết đã qua thử việc thì hệ thống hiểu là **đã xong**,
+không còn là thử việc nữa: `THU_VIEC_XONG`, `Đã thử việc xong`, `Hết thử
+việc`, `Thử việc - đã ký chính thức`.
+
+Ô để trống hoặc ghi chữ lạ thì coi là **chính thức**. Chỗ này cố ý làm
+ngược với cột trạng thái nghỉ việc: ở đó không rõ thì giữ người lại cho
+khỏi mất, còn ở đây không rõ mà đoán là thử việc thì sẽ in nhầm loại hợp
+đồng.
+
+Chưa ai được đánh dấu thì màn hình thử việc để danh sách trống và hiện
+lời nhắc bảo điền `THU_VIEC` vào cột đó. Nhân sự vẫn nhập tay được như
+thường.
+
 ## Tab lịch sử hợp đồng
 
 Mỗi lần tạo PDF thành công, hệ thống thêm một dòng vào tab

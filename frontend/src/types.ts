@@ -15,6 +15,8 @@ export type SheetEmployee = {
   unit_id?: string | null
   /** Máy chủ đã quy chức vụ của Sheet về đúng vị trí trong cấu hình. */
   position_id?: string | null
+  /** Cột Trang_Thai có ghi thử việc hay không. Không rõ thì là official. */
+  employment_type?: 'probation' | 'official'
 }
 
 export type EmployeeList = {

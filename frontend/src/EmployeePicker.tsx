@@ -36,6 +36,7 @@ function doiNgay(gia_tri: string | undefined): string | undefined {
 export default function EmployeePicker({
   positions,
   lamMoiLichSu,
+  chiThuViec,
   unitId,
   unitName,
   onPick,
@@ -44,6 +45,8 @@ export default function EmployeePicker({
   positions: Position[]
   /** Đổi giá trị là đọc lại lịch sử; cha tăng lên sau mỗi lần tạo PDF. */
   lamMoiLichSu?: number
+  /** Màn hình hợp đồng thử việc: chỉ hiện người cột Trang_Thai ghi thử việc. */
+  chiThuViec?: boolean
   /** Cơ sở đang chọn ở mục 1; danh sách chỉ hiện người của cơ sở này. */
   unitId: string
   unitName?: string
@@ -88,16 +91,26 @@ export default function EmployeePicker({
       })
   }, [])
 
+  // Làm hợp đồng thử việc thì chỉ hiện người đang thử việc. Lọc trước cả
+  // bước lọc cơ sở, để con số đếm bên dưới cũng đúng theo màn hình này.
+  const theo_loai = useMemo(
+    () =>
+      chiThuViec
+        ? (danh_sach ?? []).filter((nv) => nv.employment_type === 'probation')
+        : (danh_sach ?? []),
+    [danh_sach, chiThuViec],
+  )
+
   // Mỗi cơ sở là một pháp nhân riêng, nên chỉ hiện người của cơ sở đang
   // chọn. Người mà Sheet ghi mã trường lạ thì xếp riêng chứ không bỏ hẳn,
   // để không ai bị mất khỏi danh sách vì một ô ghi sai.
   const cung_co_so = useMemo(
-    () => (danh_sach ?? []).filter((nv) => nv.unit_id === unitId),
-    [danh_sach, unitId],
+    () => theo_loai.filter((nv) => nv.unit_id === unitId),
+    [theo_loai, unitId],
   )
   const chua_ro_co_so = useMemo(
-    () => (danh_sach ?? []).filter((nv) => !nv.unit_id),
-    [danh_sach],
+    () => theo_loai.filter((nv) => !nv.unit_id),
+    [theo_loai],
   )
 
   const ket_qua = useMemo(() => {
@@ -240,7 +253,9 @@ export default function EmployeePicker({
               <li className="hint">
                 {tim
                   ? 'Không tìm thấy ai khớp ở cơ sở này.'
-                  : 'Cơ sở này chưa có ai trong Google Sheet.'}
+                  : chiThuViec
+                    ? 'Cơ sở này chưa có ai đang thử việc.'
+                    : 'Cơ sở này chưa có ai trong Google Sheet.'}
               </li>
             )}
             {ket_qua.them.length > 0 && (
@@ -273,12 +288,22 @@ export default function EmployeePicker({
           )}
           {dangMo && (
           <p className="hint">
-            Đang hiện {cung_co_so.length} người của{' '}
+            Đang hiện {cung_co_so.length}{' '}
+            {chiThuViec ? 'người đang thử việc' : 'người'} của{' '}
             {unitName ? <b>{unitName}</b> : 'cơ sở đang chọn'}, lấy từ Google
             Sheet dùng chung với ứng dụng nhân sự ({danh_sach.length} người
             toàn hệ thống). Sheet có thể cũ hoặc thiếu — vẫn phải đọc lại
             từng ô.
           </p>
+          )}
+          {dangMo && chiThuViec && theo_loai.length === 0 && (
+            <p className="alert warn">
+              Cả Google Sheet chưa có ai được đánh dấu đang thử việc. Màn
+              hình này chỉ hiện người mà cột <b>Trang_Thai</b> ghi{' '}
+              <b>THU_VIEC</b>. Hãy điền giá trị đó cho những người đang thử
+              việc, chờ khoảng một phút rồi tải lại trang. Trong lúc chờ,
+              vẫn nhập tay bên dưới được.
+            </p>
           )}
         </>
       )}
