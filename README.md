@@ -226,9 +226,13 @@ Xem mục 18 (lộ trình) và mục 22 (những thông tin còn cần chốt) t
 
 Phần chưa làm, theo thứ tự ưu tiên trong đặc tả:
 
-1. Ghi lịch sử hợp đồng đã tạo vào một tab riêng trong cùng Google Sheet
-2. Luồng phát hành chính thức: đánh số, snapshot, chống phát hành trùng
-3. Ghi lại lịch sử thao tác của từng tài khoản
+1. Luồng phát hành chính thức: snapshot và chống phát hành trùng ở mức
+   chặn, chứ không chỉ nhắc
+2. Ghi lại lịch sử thao tác của từng tài khoản
+
+Đã làm xong: ghi lịch sử hợp đồng vào tab `LICH_SU_HOP_DONG` trong cùng
+Google Sheet, và nhắc ngay khi chọn một người đã được cấp hợp đồng. Xem
+`docs/NOI_GOOGLE_SHEET.md`.
 
 Về chức năng đọc giấy tờ: nhận cùng lúc tối đa 3 tệp, mỗi tệp là ảnh hoặc
 bản scan PDF tối đa 3 trang. PDF có lớp chữ sẵn thì dùng luôn, không có

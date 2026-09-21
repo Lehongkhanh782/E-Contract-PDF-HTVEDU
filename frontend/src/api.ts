@@ -1,6 +1,7 @@
 import type {
   Account,
   ContractForm,
+  ContractHistory,
   ProbationForm,
   EmployeeList,
   OcrResult,
@@ -97,6 +98,14 @@ export function fetchPrincipals() {
   return getJson<PrincipalList>('/api/principals')
 }
 
+/**
+ * Những hợp đồng đã cấp, để cảnh báo khi chọn lại một người đã có.
+ * Chưa nối Sheet thì trả về rỗng, không phải lỗi.
+ */
+export function fetchHistory() {
+  return getJson<ContractHistory>('/api/history')
+}
+
 export function fetchOcrStatus() {
   return getJson<OcrStatus>('/api/ocr/status')
 }
@@ -170,14 +179,21 @@ export async function preview(form: ContractForm): Promise<PreviewResponse> {
   return response.json()
 }
 
-/** Tải PDF về máy. Trả tên file đã lưu. */
+export type KetQuaTaiPdf = {
+  /** Tên file đã lưu về máy. */
+  name: string
+  /** Máy chủ đã ghi được dòng lịch sử vào Google Sheet hay chưa. */
+  historySaved: boolean
+}
+
+/** Tải PDF về máy. */
 export async function downloadProbationPdf(
   form: ProbationForm,
-): Promise<string> {
+): Promise<KetQuaTaiPdf> {
   return taiPdf('/api/generate/probation', form, 'Hop_dong_thu_viec.pdf')
 }
 
-export async function downloadPdf(form: ContractForm): Promise<string> {
+export async function downloadPdf(form: ContractForm): Promise<KetQuaTaiPdf> {
   return taiPdf('/api/generate', form, 'Bo_hop_dong.pdf')
 }
 
@@ -186,7 +202,7 @@ async function taiPdf(
   duong_dan: string,
   form: unknown,
   ten_du_phong: string,
-): Promise<string> {
+): Promise<KetQuaTaiPdf> {
   const response = await fetch(duong_dan, {
     ...WITH_SESSION,
     method: 'POST',
@@ -208,5 +224,8 @@ async function taiPdf(
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
-  return name
+  // Header thiếu hẳn nghĩa là máy chủ bản cũ chưa có chức năng lịch sử;
+  // coi như đã ghi để không dọa người dùng bằng lời nhắc vô nghĩa.
+  const ghiLichSu = response.headers.get('X-History-Saved')
+  return { name, historySaved: ghiLichSu !== 'false' }
 }

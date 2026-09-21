@@ -60,6 +60,9 @@ export default function ProbationForm({
 }) {
   const [form, setForm] = useState<Form>(bieuMauTrong)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  // Tăng lên sau mỗi lần tạo PDF, để hộp chọn nhân viên đọc lại lịch sử
+  // và cảnh báo đúng ngay trong phiên làm việc này.
+  const [lamMoiLichSu, setLamMoiLichSu] = useState(0)
   // Hiệu trưởng từng cơ sở, đọc từ Google Sheet. Chưa nối Sheet thì rỗng
   // và ô người điều hành hiện ra cho gõ tay.
   const [hieuTruong, setHieuTruong] = useState<Record<string, string>>({})
@@ -171,8 +174,17 @@ export default function ProbationForm({
       message: 'Đang dựng Word và chuyển PDF, mất khoảng 10 đến 30 giây…',
     })
     try {
-      const ten = await downloadProbationPdf(form)
-      setStatus({ kind: 'done', message: `Đã tải về: ${ten}` })
+      const { name, historySaved } = await downloadProbationPdf(form)
+      setLamMoiLichSu((n) => n + 1)
+      setStatus({
+        kind: historySaved ? 'done' : 'error',
+        message: historySaved
+          ? `Đã tải về: ${name}`
+          : `Đã tải về: ${name}. Nhưng không ghi được vào tab `
+            + 'LICH_SU_HOP_DONG trên Google Sheet, nên lần sau hệ thống sẽ '
+            + 'không biết người này đã có hợp đồng. Kiểm tra lại quyền chia '
+            + 'sẻ Sheet ở mục Kiểm tra kết nối.',
+      })
     } catch (loi) {
       if (loi instanceof UnauthorizedError) {
         onSignedOut()
@@ -211,6 +223,7 @@ export default function ProbationForm({
       >
         <EmployeePicker
           positions={positions}
+          lamMoiLichSu={lamMoiLichSu}
           unitId={form.unit_id}
           unitName={coSo?.display_name}
           disabled={dangBan}

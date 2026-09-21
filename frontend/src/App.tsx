@@ -82,6 +82,9 @@ function ContractWorkspace({
   const [positions, setPositions] = useState<Position[]>([])
   const [form, setForm] = useState<ContractForm>(emptyForm)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  // Tăng lên sau mỗi lần tạo PDF, để hộp chọn nhân viên đọc lại lịch sử
+  // và cảnh báo đúng ngay trong phiên làm việc này.
+  const [lamMoiLichSu, setLamMoiLichSu] = useState(0)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showSchedule, setShowSchedule] = useState(false)
 
@@ -235,8 +238,17 @@ function ContractWorkspace({
       message: 'Đang dựng Word và chuyển PDF, mất khoảng 10 đến 30 giây…',
     })
     try {
-      const name = await downloadPdf(form)
-      setStatus({ kind: 'done', message: `Đã tải về: ${name}` })
+      const { name, historySaved } = await downloadPdf(form)
+      setLamMoiLichSu((n) => n + 1)
+      setStatus({
+        kind: historySaved ? 'done' : 'error',
+        message: historySaved
+          ? `Đã tải về: ${name}`
+          : `Đã tải về: ${name}. Nhưng không ghi được vào tab `
+            + 'LICH_SU_HOP_DONG trên Google Sheet, nên lần sau hệ thống sẽ '
+            + 'không biết người này đã có hợp đồng. Kiểm tra lại quyền chia '
+            + 'sẻ Sheet ở mục Kiểm tra kết nối.',
+      })
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         onSignedOut()
@@ -376,6 +388,7 @@ function ContractWorkspace({
       >
         <EmployeePicker
           positions={positions}
+          lamMoiLichSu={lamMoiLichSu}
           unitId={form.unit_id}
           unitName={selectedUnit?.display_name}
           disabled={busy}

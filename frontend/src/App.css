@@ -540,3 +540,25 @@ table.calc tr.phu td {
   margin-top: 0.4rem;
   color: var(--brand-dark);
 }
+
+/* Nhãn nhỏ trên dòng danh sách: người này đã được cấp hợp đồng rồi. Đặt
+   ngay cạnh tên để thấy trước khi bấm, chứ không phải bấm xong mới biết. */
+.sheet-list .da-co-hd {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+}
+
+/* Danh sách hợp đồng đã cấp, hiện trong lời nhắc sau khi chọn người. */
+.alert .lich-su {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+}
+.alert .lich-su li {
+  margin-bottom: 0.2rem;
+}

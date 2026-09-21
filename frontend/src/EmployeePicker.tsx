@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchEmployees } from './api'
-import type { ContractForm, Position, SheetEmployee } from './types'
+import { fetchEmployees, fetchHistory } from './api'
+import type {
+  ContractForm,
+  ContractRecord,
+  Position,
+  SheetEmployee,
+} from './types'
 
 /** Bỏ dấu để tìm kiếm không phụ thuộc cách gõ. */
 function khongDau(chuoi: string): string {
@@ -30,12 +35,15 @@ function doiNgay(gia_tri: string | undefined): string | undefined {
  */
 export default function EmployeePicker({
   positions,
+  lamMoiLichSu,
   unitId,
   unitName,
   onPick,
   disabled,
 }: {
   positions: Position[]
+  /** Đổi giá trị là đọc lại lịch sử; cha tăng lên sau mỗi lần tạo PDF. */
+  lamMoiLichSu?: number
   /** Cơ sở đang chọn ở mục 1; danh sách chỉ hiện người của cơ sở này. */
   unitId: string
   unitName?: string
@@ -55,6 +63,17 @@ export default function EmployeePicker({
   // Sheet có những cột nào. Cần biết để lúc chọn người mới thì xóa đúng
   // các ô mà Sheet phụ trách, không đụng vào ô Sheet không có.
   const [cotCoTrongSheet, setCotCoTrongSheet] = useState<string[]>([])
+  // Hợp đồng đã cấp, gom theo mã nhân viên. Dùng để nhắc khi chọn lại một
+  // người đã có hợp đồng, tránh cấp trùng hai lần mà không ai biết.
+  const [lichSu, setLichSu] = useState<Record<string, ContractRecord[]>>({})
+
+  useEffect(() => {
+    // Lịch sử chỉ là lời nhắc, hỏng thì im lặng bỏ qua chứ không chặn
+    // việc tạo hợp đồng.
+    fetchHistory()
+      .then((r) => setLichSu(r.history ?? {}))
+      .catch(() => setLichSu({}))
+  }, [lamMoiLichSu])
 
   useEffect(() => {
     fetchEmployees()
@@ -104,6 +123,13 @@ export default function EmployeePicker({
     setDaChon(null)
     setDangMo(Boolean(unitId))
   }, [unitId])
+
+  /** Hợp đồng đã cấp cho người này, mới nhất đứng trước. */
+  function daCap(nv: SheetEmployee): ContractRecord[] {
+    // Chỉ tra theo mã nhân viên. Tra theo họ tên thì hai người trùng tên sẽ
+    // báo nhầm cho nhau, mà chuyện trùng tên trong trường là rất hay gặp.
+    return nv.code ? (lichSu[nv.code] ?? []) : []
+  }
 
   if (danh_sach === null) return null
   if (danh_sach.length === 0 && !loi) return null
@@ -172,6 +198,30 @@ export default function EmployeePicker({
               {daChon.code ? ` · ${daChon.code}` : ''}
             </p>
           )}
+          {daChon && daCap(daChon).length > 0 && (
+            <div className="alert warn">
+              <b>Người này đã được cấp hợp đồng rồi.</b> Kiểm tra lại xem có
+              phải làm thêm bản mới thật không, kẻo cấp trùng:
+              <ul className="lich-su">
+                {daCap(daChon)
+                  .slice(0, 5)
+                  .map((hd, i) => (
+                    <li key={`${hd.contract_number}-${i}`}>
+                      {hd.contract_type} số <b>{hd.contract_number}</b>, ký
+                      ngày {hd.signing_date || '(không rõ)'} — lập lúc{' '}
+                      {hd.created_at}
+                      {hd.created_by ? ` bởi ${hd.created_by}` : ''}
+                    </li>
+                  ))}
+              </ul>
+              {daCap(daChon).length > 5 && (
+                <span className="hint">
+                  … và {daCap(daChon).length - 5} bản nữa. Xem đầy đủ ở tab
+                  LICH_SU_HOP_DONG trong Google Sheet.
+                </span>
+              )}
+            </div>
+          )}
           {dangMo && (
           <ul className="sheet-list">
             {ket_qua.chinh.map((nv, i) => (
@@ -180,6 +230,9 @@ export default function EmployeePicker({
                   <b>{nv.full_name}</b>
                   {nv.code ? <span className="hint"> · {nv.code}</span> : null}
                   {nv.position ? <span className="hint"> · {nv.position}</span> : null}
+                  {daCap(nv).length > 0 && (
+                    <span className="da-co-hd">đã có hợp đồng</span>
+                  )}
                 </button>
               </li>
             ))}
@@ -208,6 +261,9 @@ export default function EmployeePicker({
                       {nv.position ? (
                         <span className="hint"> · {nv.position}</span>
                       ) : null}
+                      {daCap(nv).length > 0 && (
+                        <span className="da-co-hd">đã có hợp đồng</span>
+                      )}
                     </button>
                   </li>
                 ))}

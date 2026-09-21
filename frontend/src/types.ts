@@ -89,6 +89,25 @@ export type Position = {
 }
 
 /** Tên hiệu trưởng từng cơ sở, đọc từ Google Sheet nhân sự. */
+/** Một dòng trong tab LICH_SU_HOP_DONG của Google Sheet. */
+export type ContractRecord = {
+  created_at: string
+  code: string
+  full_name: string
+  unit_id: string
+  contract_type: string
+  contract_number: string
+  signing_date: string
+  created_by: string
+}
+
+export type ContractHistory = {
+  available: boolean
+  /** Gom theo mã nhân viên, mới nhất đứng trước. */
+  history: Record<string, ContractRecord[]>
+  note?: string
+}
+
 export type PrincipalList = { principals: Record<string, string> }
 
 export type SalaryMode = 'gross' | 'net'

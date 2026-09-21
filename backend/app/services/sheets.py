@@ -16,6 +16,7 @@ import re
 import threading
 import time
 import unicodedata
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 PHAM_VI = "https://www.googleapis.com/auth/spreadsheets"
@@ -244,7 +245,28 @@ def _goi(duong_dan: str, tham_so: dict | None = None) -> dict:
         )
     except httpx.HTTPError as loi:
         raise LoiSheet("Không kết nối được tới Google Sheets") from loi
+    return _doc_phan_hoi(phan_hoi)
 
+
+def _ghi(duong_dan: str, than: dict, tham_so: dict | None = None) -> dict:
+    """Gửi dữ liệu lên Sheet. Cần tài khoản máy có quyền Editor."""
+    import httpx
+
+    _, ma_sheet, _ = _cau_hinh()
+    try:
+        phan_hoi = httpx.post(
+            f"{GOC_API}/{ma_sheet}{duong_dan}",
+            headers={"Authorization": f"Bearer {_lay_ve()}"},
+            params=tham_so or {},
+            json=than,
+            timeout=THOI_GIAN_CHO,
+        )
+    except httpx.HTTPError as loi:
+        raise LoiSheet("Không kết nối được tới Google Sheets") from loi
+    return _doc_phan_hoi(phan_hoi, ghi=True)
+
+
+def _doc_phan_hoi(phan_hoi, ghi: bool = False) -> dict:
     if phan_hoi.status_code == 403:
         # Cùng mã 403 nhưng hai nguyên nhân khác hẳn nhau: chưa bật API, hay
         # chưa chia sẻ Sheet. Đọc nội dung trả về mới phân biệt được.
@@ -255,8 +277,11 @@ def _goi(duong_dan: str, tham_so: dict | None = None) -> dict:
                 "rồi tải lại trang này."
             )
         raise LoiSheet(
-            "Google từ chối truy cập. Hãy mở Sheet, bấm Chia sẻ và thêm email "
-            f"{email_tai_khoan_may()} với quyền Editor."
+            "Google từ chối "
+            + ("ghi vào" if ghi else "truy cập")
+            + ". Hãy mở Sheet, bấm Chia sẻ và thêm email "
+            f"{email_tai_khoan_may()} với quyền Editor "
+            "(quyền Viewer chỉ đọc được, không ghi được)."
         )
     if phan_hoi.status_code == 404:
         raise LoiSheet(
@@ -456,6 +481,128 @@ def hieu_truong_tung_co_so() -> dict[str, str]:
     return {ma: ds[0] for ma, ds in theo_co_so.items() if len(ds) == 1}
 
 
+# ---------------------------------------------------------------------------
+# Lịch sử hợp đồng
+#
+# Mỗi lần tạo PDF thành công, ghi một dòng vào tab riêng trong cùng Sheet.
+# Nhờ vậy lần sau chọn lại người đó thì biết ngay là đã cấp hợp đồng rồi,
+# và kế toán có chỗ đối chiếu số hợp đồng đã phát hành.
+#
+# Ghi vào chính Sheet nhân sự chứ không dựng cơ sở dữ liệu riêng: máy chủ
+# Render bản miễn phí xóa sạch đĩa mỗi lần dựng lại, nên dữ liệu để trong
+# máy chủ là mất. Sheet thì nhà trường vẫn mở xem và sửa được bằng tay.
+# ---------------------------------------------------------------------------
+
+TAB_LICH_SU = "LICH_SU_HOP_DONG"
+COT_LICH_SU = ("Thoi_Diem", "Ma_Nhan_Vien", "Ho_Ten", "Ma_Truong",
+               "Loai_Hop_Dong", "So_Hop_Dong", "Ngay_Ky", "Nguoi_Tao")
+# Giờ Việt Nam. Không dùng giờ của máy chủ vì Render chạy theo giờ UTC,
+# ghi vào Sheet sẽ lệch 7 tiếng và người đọc tưởng là hợp đồng làm lúc nửa đêm.
+MUI_GIO_VN = timezone(timedelta(hours=7))
+TEN_LOAI_HOP_DONG = {
+    "official": "Hợp đồng lao động",
+    "probation": "Hợp đồng thử việc",
+}
+
+
+def _bay_gio() -> str:
+    return datetime.now(MUI_GIO_VN).strftime("%d/%m/%Y %H:%M")
+
+
+def _tao_tab_lich_su() -> None:
+    """Tạo tab lịch sử kèm dòng tiêu đề, nếu Sheet chưa có tab đó."""
+    _ghi(":batchUpdate", {
+        "requests": [{"addSheet": {"properties": {"title": TAB_LICH_SU}}}]
+    })
+    _ghi(
+        f"/values/{TAB_LICH_SU}!A1:append",
+        {"values": [list(COT_LICH_SU)]},
+        {"valueInputOption": "RAW", "insertDataOption": "INSERT_ROWS"},
+    )
+
+
+def ghi_lich_su(ban_ghi: dict) -> None:
+    """Thêm một dòng vào tab lịch sử. Tab chưa có thì tự tạo.
+
+    Người gọi phải tự bắt lỗi: không ghi được lịch sử là chuyện đáng báo,
+    nhưng không được vì thế mà hủy mất cái PDF đã dựng xong.
+    """
+    if TAB_LICH_SU not in danh_sach_tab():
+        _tao_tab_lich_su()
+    dong = [
+        _bay_gio(),
+        str(ban_ghi.get("code") or ""),
+        str(ban_ghi.get("full_name") or ""),
+        str(ban_ghi.get("unit_id") or ""),
+        TEN_LOAI_HOP_DONG.get(str(ban_ghi.get("contract_type")),
+                              str(ban_ghi.get("contract_type") or "")),
+        str(ban_ghi.get("contract_number") or ""),
+        str(ban_ghi.get("signing_date") or ""),
+        str(ban_ghi.get("created_by") or ""),
+    ]
+    _ghi(
+        f"/values/{TAB_LICH_SU}!A1:append",
+        {"values": [dong]},
+        # RAW để Google khỏi tự hiểu "12/09/2026" thành ngày rồi đổi cách
+        # hiển thị, và khỏi coi mã nhân viên toàn số là con số.
+        {"valueInputOption": "RAW", "insertDataOption": "INSERT_ROWS"},
+    )
+    xoa_nho_lich_su()
+
+
+_khoa_lich_su = threading.Lock()
+_nho_lich_su: tuple[dict[str, list[dict]], float] | None = None
+
+
+def lich_su_theo_ma(lam_moi: bool = False) -> dict[str, list[dict]]:
+    """Lịch sử đã ghi, gom theo mã nhân viên, mới nhất đứng trước.
+
+    Chưa có tab lịch sử nghĩa là chưa cấp hợp đồng nào — trả rỗng, không
+    phải lỗi.
+    """
+    global _nho_lich_su
+    with _khoa_lich_su:
+        if (_nho_lich_su and not lam_moi
+                and time.time() - _nho_lich_su[1] < THOI_GIAN_NHO):
+            return _nho_lich_su[0]
+
+    if TAB_LICH_SU not in danh_sach_tab():
+        ket_qua: dict[str, list[dict]] = {}
+    else:
+        du_lieu = _goi(f"/values/{TAB_LICH_SU}!A1:H{SO_DONG_TOI_DA}",
+                       {"majorDimension": "ROWS"})
+        ket_qua = _gom_lich_su(du_lieu.get("values", []))
+
+    with _khoa_lich_su:
+        _nho_lich_su = (ket_qua, time.time())
+    return ket_qua
+
+
+def _gom_lich_su(o: list[list[str]]) -> dict[str, list[dict]]:
+    """Đổi các ô đọc được thành lịch sử gom theo mã nhân viên."""
+    theo_ma: dict[str, list[dict]] = {}
+    for dong in o[1:]:
+        gia_tri = [str(dong[i]).strip() if i < len(dong) else ""
+                   for i in range(len(COT_LICH_SU))]
+        ban_ghi = dict(zip(
+            ("created_at", "code", "full_name", "unit_id", "contract_type",
+             "contract_number", "signing_date", "created_by"),
+            gia_tri,
+        ))
+        # Không có mã nhân viên thì không tra lại được, nhưng vẫn là dòng
+        # có thật trong Sheet nên giữ dưới khóa rỗng thay vì bỏ đi.
+        if not ban_ghi["full_name"] and not ban_ghi["code"]:
+            continue
+        theo_ma.setdefault(ban_ghi["code"], []).insert(0, ban_ghi)
+    return theo_ma
+
+
+def xoa_nho_lich_su() -> None:
+    global _nho_lich_su
+    with _khoa_lich_su:
+        _nho_lich_su = None
+
+
 def gia_tri_khac_nhau(nhan_vien: list[dict], truong: str,
                       toi_da: int = 40) -> list[str] | None:
     """Liệt kê các giá trị khác nhau của một cột, để đối chiếu với cấu hình.
@@ -479,6 +626,7 @@ def gia_tri_khac_nhau(nhan_vien: list[dict], truong: str,
 
 def xoa_bo_nho() -> None:
     global _nho, _ve
+    xoa_nho_lich_su()
     with _khoa_nho:
         _nho = None
     with _khoa_ve:

@@ -635,5 +635,151 @@ class QuyVeCauHinh(unittest.TestCase):
         self.assertEqual(ten, ["Người đang làm"])
 
 
+class TestGhiLichSu(unittest.TestCase):
+    """Ghi lịch sử hợp đồng vào tab riêng trong cùng Sheet."""
+
+    def setUp(self):
+        sheets.xoa_bo_nho()
+
+    BAN_GHI = {
+        "code": "HTV010",
+        "full_name": "Nguyễn Thị Minh An",
+        "unit_id": "gau_panda",
+        "contract_type": "probation",
+        "contract_number": "GPD/HDTV/HTV010",
+        "signing_date": "21/09/2026",
+        "created_by": "Chị Lan",
+    }
+
+    def _ghi(self, tab_co_san):
+        """Ghi một dòng, trả về các lần gọi _ghi đã thực hiện."""
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "danh_sach_tab", return_value=tab_co_san
+        ), mock.patch.object(sheets, "_ghi", return_value={}) as goi:
+            sheets.ghi_lich_su(self.BAN_GHI)
+        return goi.call_args_list
+
+    def test_ghi_dung_thu_tu_cot(self):
+        goi = self._ghi(["NHAN_SU", sheets.TAB_LICH_SU])
+        self.assertEqual(len(goi), 1)
+        dong = goi[0].args[1]["values"][0]
+        self.assertEqual(len(dong), len(sheets.COT_LICH_SU))
+        self.assertEqual(dong[1], "HTV010")
+        self.assertEqual(dong[2], "Nguyễn Thị Minh An")
+        self.assertEqual(dong[3], "gau_panda")
+        self.assertEqual(dong[4], "Hợp đồng thử việc")
+        self.assertEqual(dong[5], "GPD/HDTV/HTV010")
+        self.assertEqual(dong[6], "21/09/2026")
+        self.assertEqual(dong[7], "Chị Lan")
+
+    def test_ghi_thoi_diem_theo_gio_viet_nam(self):
+        dong = self._ghi([sheets.TAB_LICH_SU])[0].args[1]["values"][0]
+        self.assertRegex(dong[0], r"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}$")
+
+    def test_chua_co_tab_thi_tu_tao_kem_tieu_de(self):
+        goi = self._ghi(["NHAN_SU"])
+        # Tạo tab, ghi dòng tiêu đề, rồi mới ghi dòng dữ liệu.
+        self.assertEqual(len(goi), 3)
+        self.assertEqual(goi[0].args[0], ":batchUpdate")
+        self.assertEqual(
+            goi[0].args[1]["requests"][0]["addSheet"]["properties"]["title"],
+            sheets.TAB_LICH_SU,
+        )
+        self.assertEqual(goi[1].args[1]["values"][0], list(sheets.COT_LICH_SU))
+
+    def test_ghi_dang_tho_de_google_khong_doi_ngay(self):
+        """Mã nhân viên toàn số và ngày dd/mm/yyyy phải giữ nguyên chữ."""
+        goi = self._ghi([sheets.TAB_LICH_SU])
+        self.assertEqual(goi[0].args[2]["valueInputOption"], "RAW")
+
+    def test_loai_la_thi_ghi_nguyen_chu(self):
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "danh_sach_tab", return_value=[sheets.TAB_LICH_SU]
+        ), mock.patch.object(sheets, "_ghi", return_value={}) as goi:
+            sheets.ghi_lich_su({**self.BAN_GHI, "contract_type": "la_hoac"})
+        self.assertEqual(goi.call_args.args[1]["values"][0][4], "la_hoac")
+
+
+class TestDocLichSu(unittest.TestCase):
+    def setUp(self):
+        sheets.xoa_bo_nho()
+
+    O_LICH_SU = [
+        list(sheets.COT_LICH_SU),
+        ["20/09/2026 09:15", "HTV010", "Nguyễn Thị Minh An", "gau_panda",
+         "Hợp đồng thử việc", "GPD/HDTV/HTV010", "20/09/2026", "Chị Lan"],
+        ["21/09/2026 10:30", "HTV010", "Nguyễn Thị Minh An", "gau_panda",
+         "Hợp đồng lao động", "GPD/HDLD/HTV010", "21/09/2026", "Chị Lan"],
+        ["21/09/2026 11:00", "HTV011", "Trần Văn Bốn", "victoria",
+         "Hợp đồng lao động", "VIC/HDLD/HTV011", "21/09/2026", "Chị Lan"],
+    ]
+
+    def _doc(self, tab, o=None):
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "danh_sach_tab", return_value=tab
+        ), mock.patch.object(sheets, "_goi", return_value={"values": o or []}):
+            return sheets.lich_su_theo_ma(lam_moi=True)
+
+    def test_gom_theo_ma_nhan_vien(self):
+        ket_qua = self._doc([sheets.TAB_LICH_SU], self.O_LICH_SU)
+        self.assertEqual(sorted(ket_qua), ["HTV010", "HTV011"])
+        self.assertEqual(len(ket_qua["HTV010"]), 2)
+
+    def test_moi_nhat_dung_truoc(self):
+        ket_qua = self._doc([sheets.TAB_LICH_SU], self.O_LICH_SU)
+        self.assertEqual(ket_qua["HTV010"][0]["contract_number"],
+                         "GPD/HDLD/HTV010")
+
+    def test_chua_co_tab_thi_coi_nhu_chua_cap_hop_dong_nao(self):
+        """Không phải lỗi: Sheet mới thì chưa có tab lịch sử là đương nhiên."""
+        self.assertEqual(self._doc(["NHAN_SU"]), {})
+
+    def test_bo_qua_dong_trong(self):
+        o = self.O_LICH_SU + [["", "", "", "", "", "", "", ""]]
+        ket_qua = self._doc([sheets.TAB_LICH_SU], o)
+        self.assertEqual(sum(len(v) for v in ket_qua.values()), 3)
+
+    def test_dong_thieu_o_cuoi_van_doc_duoc(self):
+        """Google cắt bớt ô trống ở cuối dòng; không được vì thế mà đổ."""
+        o = [list(sheets.COT_LICH_SU),
+             ["21/09/2026 10:30", "HTV010", "Nguyễn Thị Minh An"]]
+        ban_ghi = self._doc([sheets.TAB_LICH_SU], o)["HTV010"][0]
+        self.assertEqual(ban_ghi["full_name"], "Nguyễn Thị Minh An")
+        self.assertEqual(ban_ghi["created_by"], "")
+
+    def test_nho_ket_qua_de_khoi_goi_lai_google(self):
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "danh_sach_tab", return_value=[sheets.TAB_LICH_SU]
+        ), mock.patch.object(
+            sheets, "_goi", return_value={"values": self.O_LICH_SU}
+        ) as goi:
+            sheets.lich_su_theo_ma(lam_moi=True)
+            sheets.lich_su_theo_ma()
+            self.assertEqual(goi.call_count, 1)
+
+    def test_ghi_xong_thi_bo_nho_cu(self):
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "danh_sach_tab", return_value=[sheets.TAB_LICH_SU]
+        ), mock.patch.object(
+            sheets, "_goi", return_value={"values": self.O_LICH_SU}
+        ) as doc, mock.patch.object(sheets, "_ghi", return_value={}):
+            sheets.lich_su_theo_ma(lam_moi=True)
+            sheets.ghi_lich_su(TestGhiLichSu.BAN_GHI)
+            sheets.lich_su_theo_ma()
+            self.assertEqual(doc.call_count, 2)
+
+
+class TestQuyenGhi(unittest.TestCase):
+    def test_403_khi_ghi_nhac_dung_quyen_editor(self):
+        phan_hoi = mock.Mock(status_code=403, text="PERMISSION_DENIED")
+        with dat_cau_hinh(), mock.patch.object(
+            sheets, "_lay_ve", return_value="ve"
+        ), mock.patch("httpx.post", return_value=phan_hoi):
+            with self.assertRaises(sheets.LoiSheet) as bat:
+                sheets._ghi("/values/X!A1:append", {"values": []})
+        self.assertIn("Editor", str(bat.exception))
+        self.assertIn("Viewer", str(bat.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

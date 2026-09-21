@@ -45,6 +45,31 @@ def _ascii_filename(name: str) -> str:
     return safe.strip("_") or "hop_dong"
 
 
+def _ghi_lich_su(meta: dict, request, user: User) -> bool:
+    """Ghi một dòng lịch sử vào Google Sheet. Trả về có ghi được hay không.
+
+    Không bao giờ ném lỗi ra ngoài: PDF đã dựng xong rồi, mất dòng lịch sử
+    còn hơn là mất luôn hợp đồng vì Sheet trục trặc. Ghi không được thì
+    ghi vào log máy chủ và báo lại qua header để giao diện nhắc người dùng.
+    """
+    try:
+        sheets.ghi_lich_su({
+            "code": request.employee.code,
+            "full_name": request.employee.full_name,
+            "unit_id": request.unit_id,
+            "contract_type": meta["contract_type"],
+            "contract_number": meta["contract_number"],
+            "signing_date": request.signing_date.strftime("%d/%m/%Y"),
+            "created_by": user.display_name or user.username,
+        })
+        return True
+    except (sheets.ChuaCauHinh, sheets.LoiSheet) as loi:
+        logger.warning("Không ghi được lịch sử hợp đồng: %s", loi)
+    except Exception:
+        logger.exception("Lỗi ngoài dự tính khi ghi lịch sử hợp đồng")
+    return False
+
+
 @router.get("/health")
 def health() -> dict:
     return {"status": "ok", "demo_only": documents.ban_thu_nghiem()}
@@ -269,6 +294,25 @@ def employees(refresh: bool = False,
     }
 
 
+@router.get("/history")
+def contract_history(refresh: bool = False,
+                     _: User = Depends(current_user)) -> dict:
+    """Những hợp đồng đã cấp, gom theo mã nhân viên.
+
+    Dùng để cảnh báo khi chọn một người đã có hợp đồng. Chưa nối Sheet
+    hay Sheet lỗi thì trả rỗng kèm lý do, chứ không chặn việc tạo hợp
+    đồng: đây là lời nhắc, không phải khóa.
+    """
+    try:
+        return {"available": True, "history": sheets.lich_su_theo_ma(refresh)}
+    except (sheets.ChuaCauHinh, sheets.LoiSheet) as loi:
+        return {"available": False, "history": {}, "note": str(loi)}
+    except Exception:
+        logger.exception("Lỗi ngoài dự tính khi đọc lịch sử hợp đồng")
+        return {"available": False, "history": {},
+                "note": "Không đọc được lịch sử hợp đồng từ Google Sheet."}
+
+
 @router.post("/salary")
 def salary(request: SalaryRequest,
            _: User = Depends(current_user)) -> JSONResponse:
@@ -328,6 +372,7 @@ def generate(request: ContractRequest,
         cleanup()
         raise
 
+    da_ghi = _ghi_lich_su(meta, request, user)
     name = _ascii_filename(f"DEMO_{request.employee.code}_{request.unit_id}") + ".pdf"
     return FileResponse(
         target,
@@ -336,6 +381,7 @@ def generate(request: ContractRequest,
         headers={
             "X-Demo-Only": "true",
             "X-Calculation-Sha256": meta["sha256"],
+            "X-History-Saved": "true" if da_ghi else "false",
         },
         background=BackgroundTask(cleanup),
     )
@@ -366,6 +412,7 @@ def generate_probation(request: ProbationRequest,
         cleanup()
         raise
 
+    da_ghi = _ghi_lich_su(meta, request, user)
     dau = "DEMO_" if meta["demo_only"] else ""
     name = _ascii_filename(
         f"{dau}Thu_viec_{request.employee.code}_{request.unit_id}"
@@ -377,6 +424,7 @@ def generate_probation(request: ProbationRequest,
         headers={
             "X-Demo-Only": "true" if meta["demo_only"] else "false",
             "X-Contract-Number": _ascii_filename(meta["contract_number"]),
+            "X-History-Saved": "true" if da_ghi else "false",
         },
         background=BackgroundTask(cleanup),
     )

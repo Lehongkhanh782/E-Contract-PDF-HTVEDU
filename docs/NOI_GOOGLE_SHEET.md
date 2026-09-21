@@ -133,15 +133,45 @@ Phần `headers` và `columns` trong đó cho biết hệ thống hiểu cột n
 
 ## Những gì hệ thống làm và không làm với Sheet
 
-**Hiện tại chỉ ĐỌC.** Chưa ghi gì vào Sheet của bạn.
+**ĐỌC tab nhân sự, và GHI vào đúng một tab riêng.** Hệ thống không bao
+giờ sửa hay xóa tab nhân sự của bạn. Nó chỉ thêm dòng vào tab
+`LICH_SU_HOP_DONG`.
 
 **Nhớ tạm 60 giây.** Sửa Sheet xong chờ khoảng một phút mới thấy thay đổi.
 
 **Dữ liệu vẫn là gợi ý.** Sheet có thể cũ hoặc thiếu, nên nhân sự vẫn phải
 đọc lại từng ô trước khi tạo hợp đồng. Giao diện có ghi nhắc điều này.
 
-**Chưa làm: ghi lịch sử hợp đồng vào một tab riêng.** Việc đó cần Sheet
-chạy thông trước đã, và cần bạn chốt muốn ghi những cột gì.
+## Tab lịch sử hợp đồng
+
+Mỗi lần tạo PDF thành công, hệ thống thêm một dòng vào tab
+`LICH_SU_HOP_DONG`. Tab đó chưa có thì hệ thống tự tạo, bạn không phải
+làm gì.
+
+Tám cột, đúng thứ tự này:
+
+| Cột | Nội dung |
+| --- | --- |
+| `Thoi_Diem` | Lúc bấm tạo hợp đồng, giờ Việt Nam, dạng `21/09/2026 10:30` |
+| `Ma_Nhan_Vien` | Lấy từ ô Mã nhân viên trên biểu mẫu |
+| `Ho_Ten` | Họ tên trên hợp đồng |
+| `Ma_Truong` | Cơ sở đứng tên ký |
+| `Loai_Hop_Dong` | Hợp đồng lao động hay Hợp đồng thử việc |
+| `So_Hop_Dong` | Ví dụ `GPD/HDTV/HTV010` |
+| `Ngay_Ky` | Ngày ký ghi trên hợp đồng |
+| `Nguoi_Tao` | Tài khoản đã bấm nút tạo |
+
+Nhờ tab này, lần sau chọn lại người đó trong hộp **Chọn nhân viên đã có**,
+hệ thống hiện ngay nhãn *đã có hợp đồng* và liệt kê những bản đã cấp. Đó
+là **lời nhắc**, không phải khóa: vẫn tạo thêm được, vì có những trường
+hợp phải làm bản mới thật.
+
+Tab này bạn mở xem, lọc, sửa hay xóa dòng bằng tay đều được như mọi tab
+khác. Hệ thống chỉ thêm vào cuối.
+
+**Nếu ghi không được**, ví dụ tài khoản máy chỉ có quyền Viewer, thì PDF
+vẫn tải về bình thường — không bao giờ mất hợp đồng vì Sheet trục trặc —
+nhưng màn hình sẽ hiện lời nhắc màu đỏ để bạn vào sửa lại quyền chia sẻ.
 
 ## Cảnh báo về dữ liệu cá nhân
 

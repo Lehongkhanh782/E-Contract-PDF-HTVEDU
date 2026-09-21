@@ -205,6 +205,8 @@ def _build_pdf(unit_id: str, payload: dict, destination: Path) -> dict:
     return {
         "demo_only": ban_thu_nghiem(),
         "unit_id": unit_id,
+        "contract_type": "official",
+        "contract_number": context["contract"]["number"],
         "calculation": result,
         "position_id": payload["job"]["position_id"],
         "salary_mode": payload["compensation"]["salary_mode"],
