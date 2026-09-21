@@ -135,9 +135,12 @@ def _mo_rong_mot_doan(doan: str, cho_phep_tinh: bool = True) -> str:
     if cho_phep_tinh and gon in TINH_THANH:
         return TINH_THANH[gon]
 
-    # Cấp hành chính ở đầu đoạn: "P.10", "P 10", "Q. Tân Bình", "X Hòa Bình".
-    khop = re.match(r"^([A-Za-zĐđ]{1,2})\s*\.\s*(.+)$", doan) or re.match(
-        r"^([A-Za-zĐđ]{1,2})\s+(\d.*|[A-ZĐ].*)$", doan
+    # Cấp hành chính ở đầu đoạn: "P.10", "P 10", "Q. Tân Bình", "X Hòa Bình",
+    # và dạng viết liền số như "P13", "Q1".
+    khop = (
+        re.match(r"^([A-Za-zĐđ]{1,2})\s*\.\s*(.+)$", doan)
+        or re.match(r"^([A-Za-zĐđ]{1,2})\s+(\d.*|[A-ZĐ].*)$", doan)
+        or re.match(r"^([PpQq])(\d{1,2})$", doan)
     )
     if khop and _khong_dau(khop.group(1)) in CAP_HANH_CHINH:
         cap = CAP_HANH_CHINH[_khong_dau(khop.group(1))]
@@ -193,8 +196,15 @@ _NHAN_HANH_CHINH = re.compile(
     r"thành\s+phố|thanh\s+pho|đặc\s+khu|dac\s+khu)\s+"
     r"|(?:tỉnh|tinh)\s+(?!(?:lộ|lo)\b)"
     r"|(?:tp|tt|tx|p|q|x|h)(?:\.\s*|\s+)"
+    # "P13" và "Q1" viết liền số là cách ghi rất hay gặp. Chỉ nhận p và q
+    # vì đó là hai chữ duy nhất thường dính liền số trong địa chỉ.
+    r"|(?:p|q)(?=\d)"
     r")(?=\w))", re.IGNORECASE,
 )
+
+
+# Đứng sau những từ này thì "Q1" là tên lô hay tên căn, không phải quận.
+TU_TRUOC_KHONG_PHAI_CAP = {"lo", "block", "can", "can ho", "thua", "nha", "kho"}
 
 
 def _tach_doan(dia_chi: str) -> list[str]:
@@ -202,8 +212,14 @@ def _tach_doan(dia_chi: str) -> list[str]:
     dia_chi = unicodedata.normalize("NFC", dia_chi)
     moc = [m.start() for m in _NHAN_HANH_CHINH.finditer(dia_chi)]
     for vi_tri in reversed(moc):
-        if dia_chi[:vi_tri].strip(" ,"):
-            dia_chi = dia_chi[:vi_tri] + "," + dia_chi[vi_tri:]
+        truoc = dia_chi[:vi_tri].strip(" ,")
+        if not truoc:
+            continue
+        # "Lô Q1" là tên lô trong khu công nghiệp, không phải Quận 1.
+        tu_cuoi = _khong_dau(truoc.split()[-1]) if truoc.split() else ""
+        if tu_cuoi in TU_TRUOC_KHONG_PHAI_CAP:
+            continue
+        dia_chi = dia_chi[:vi_tri] + "," + dia_chi[vi_tri:]
     return [d.strip() for d in dia_chi.split(",") if d.strip()]
 
 

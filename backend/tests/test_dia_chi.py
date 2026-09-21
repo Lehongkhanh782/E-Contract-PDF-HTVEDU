@@ -403,6 +403,33 @@ class TestFileBangSapNhapXa(unittest.TestCase):
         self.assertGreater(self.goc["so_xa_cu_nhieu_kha_nang"], 0)
 
 
+class TestVietLienKhongDauCham(unittest.TestCase):
+    """P13 và Q1 viết liền số là cách ghi rất hay gặp trong hồ sơ nhân sự."""
+
+    def test_p_va_q_dinh_lien_so(self):
+        self.assertEqual(
+            chuan_hoa("659 CMT8 P13 Q10")["address"],
+            "659 Cách Mạng Tháng Tám, Phường Hòa Hưng, "
+            "Thành phố Hồ Chí Minh",
+        )
+
+    def test_khong_dau_cham_khong_dau_phay(self):
+        self.assertEqual(
+            chuan_hoa("12 Lê Lợi P Bến Nghé Q1")["address"],
+            "12 Lê Lợi, Phường Sài Gòn, Thành phố Hồ Chí Minh",
+        )
+
+    def test_lo_q1_khong_phai_quan_1(self):
+        """Lô Q1 là tên lô trong khu công nghiệp."""
+        ra = chuan_hoa("Lô Q1, KCN Tân Bình, TPHCM")
+        self.assertIn("Lô Q1", ra["address"])
+        self.assertNotIn("Quận 1", ra["address"])
+
+    def test_block_b2_khong_bi_tach(self):
+        self.assertIn("Block B2",
+                      chuan_hoa("Block B2, Chung cư Sky, P. An Khánh")["address"])
+
+
 class TestApiDiaChi(unittest.TestCase):
 
     def test_dia_chi_thieu_phay_va_thanh_pho(self):
