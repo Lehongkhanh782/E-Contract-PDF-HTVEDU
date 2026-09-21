@@ -299,7 +299,7 @@ export default function EmployeePicker({
           {dangMo && chiThuViec && theo_loai.length === 0 && (
             <p className="alert warn">
               Cả Google Sheet chưa có ai được đánh dấu đang thử việc. Màn
-              hình này chỉ hiện người mà cột <b>Trang_Thai</b> ghi{' '}
+              hình này chỉ hiện người mà cột <b>Trang_Thai_HD</b> ghi{' '}
               <b>THU_VIEC</b>. Hãy điền giá trị đó cho những người đang thử
               việc, chờ khoảng một phút rồi tải lại trang. Trong lúc chờ,
               vẫn nhập tay bên dưới được.

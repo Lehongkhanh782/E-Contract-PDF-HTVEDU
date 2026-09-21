@@ -240,6 +240,14 @@ def sheets_status(_: User = Depends(current_user)) -> dict:
                 du_lieu["employees"], "position"),
             "status_values": sheets.gia_tri_khac_nhau(
                 du_lieu["employees"], "status"),
+            # Để đối chiếu xem cột Trang_Thai_HD đang ghi những chữ gì, và
+            # hệ thống có nhận ra chữ đó là thử việc không.
+            "contract_status_values": sheets.gia_tri_khac_nhau(
+                du_lieu["employees"], "contract_status"),
+            "probation_count": sum(
+                1 for nv in du_lieu["employees"]
+                if nv.get("employment_type") == "probation"
+            ),
         })
     except sheets.LoiSheet as loi:
         ket_qua.update({"connected": False, "error": str(loi)})
